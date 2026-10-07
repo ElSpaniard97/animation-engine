@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+.DS_Store
+public/assets/
+.venv/
+.models/
+.jobs/
+__pycache__/
+app-preview.jpg

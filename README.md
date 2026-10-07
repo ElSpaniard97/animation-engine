@@ -22,7 +22,7 @@ python3.12 -m venv .venv
 npm run dev
 ```
 
-Enter a prompt, choose text-to-video or current-image-to-video, and click Generate on my GPU. The first generation downloads the Lightricks/LTX-Video model into `.models/`; allow substantial disk space and download time. Subsequent generations reuse that cache. Inference is local. The server listens only on loopback, validates request origin, and runs one GPU job at a time. Jobs and generated MP4s are saved under `.jobs/`. Cancel stops the worker. Generation status is held in memory; restart clears the job list, while files remain on disk.
+Enter a prompt, choose text-to-video or current-image-to-video, and click Generate on my GPU. The first generation downloads the Lightricks/LTX-Video model into `.models/`; allow roughly 27 GB for the initial model weights and substantial download time. Subsequent generations reuse that cache. Inference is local. The server listens only on loopback, validates request origin, and runs one GPU job at a time. Jobs and generated MP4s are saved under `.jobs/`. Cancel stops the worker. Generation status is held in memory; restart clears the job list, while files remain on disk.
 
 The current checkout already has its isolated Python environment installed. It uses PyTorch's MPS backend on the M4 Mac. The text encoder runs on CPU and is released before GPU denoising to reduce memory pressure. Preview presets are intentionally small (256×448, 448×256, or 448×448; 9, 25, or 49 frames at 24 fps). Generation performance and quality depend on hardware and model; this is an initial application, not feature parity with Runway.
 
@@ -44,7 +44,7 @@ npm run check
 .venv/bin/python -m py_compile engine/generate.py
 ```
 
-JavaScript and Python syntax checked; local HTTP response, playback, camera/effect controls, and GPU availability checked. Full AI inference and browser export must be verified before treating this as production-ready.
+JavaScript and Python syntax checked; local HTTP response, playback, camera/effect controls, and GPU availability checked. The editor completed its browser WebM export. Invalid generation requests and WebMCP valid/invalid settings were also checked. Full AI inference remains pending the initial model download.
 
 ## Model documentation
 
