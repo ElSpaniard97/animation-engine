@@ -20,11 +20,12 @@ class Cancelled(Exception):
 
 
 class Engine:
-    """Holds the LTX pipelines. `progress(stage, step, total)` reports what it is doing.
+    """Holds the LTX pipelines on the GPU. `progress(stage, step, total)` reports what it is doing.
 
-    The text encoder (T5, the largest part) stays on the CPU and runs only for prompts it hasn't
-    seen; the transformer and VAE stay on the GPU. Re-running a prompt with a new seed skips
-    encoding entirely.
+    Everything, including the T5 text encoder, lives on the GPU: on an M4 that encodes a prompt in
+    about 2 s instead of about 22 s on the CPU, at the cost of holding about 14 GB while loaded
+    (the app unloads the worker when idle). Prompt embeddings are cached, so re-running a prompt
+    with a new seed skips encoding entirely.
     """
 
     def __init__(self, progress):
@@ -49,33 +50,38 @@ class Engine:
         else:
             raise RuntimeError('No supported GPU found. Apple Metal or NVIDIA CUDA is required.')
         self.progress('Loading model weights (first run downloads them)')
-        self.encoder = LTXPipeline.from_pretrained(MODEL, torch_dtype=torch.bfloat16)
+        self.text_to_video = LTXPipeline.from_pretrained(MODEL, torch_dtype=torch.bfloat16)
         self.progress('Moving model to the GPU')
-        self.encoder.transformer.to(self.device)
-        self.encoder.vae.to(self.device)
-        self.encoder.vae.enable_tiling()
-        # Generation pipelines share the GPU modules but have no text encoder, so diffusers runs
-        # them on the GPU rather than on the CPU where the encoder lives.
-        parts = {**self.encoder.components, 'text_encoder': None}
-        self.text_to_video = LTXPipeline(**parts)
-        self.image_to_video = LTXImageToVideoPipeline(**parts)
+        self.text_to_video.to(self.device)
+        self.text_to_video.vae.enable_tiling()
+        # Shares the same modules, so image-to-video costs no extra memory.
+        self.image_to_video = LTXImageToVideoPipeline(**self.text_to_video.components)
         self.loaded = True
         self.timings['load'] = time.monotonic() - started
 
+    def sync(self):
+        """Waits for queued GPU work. MPS runs asynchronously, so without this, step progress
+        races ahead and the real time shows up later as a long 'Encoding MP4'."""
+        if self.device == 'mps':
+            self.torch.mps.synchronize()
+        elif self.device == 'cuda':
+            self.torch.cuda.synchronize()
+
     def encode(self, prompt):
-        """Prompt embeddings on the CPU, cached so seed variations skip the text encoder."""
+        """Prompt embeddings, kept on the CPU in a small cache so seed variations skip encoding."""
         if prompt in self.embeddings:
             self.embeddings.move_to_end(prompt)
             return self.embeddings[prompt]
         self.progress('Encoding prompt')
         with self.torch.inference_mode():
-            embeddings = self.encoder.encode_prompt(
+            embeddings = self.text_to_video.encode_prompt(
                 prompt=prompt,
                 negative_prompt=NEGATIVE_PROMPT,
                 do_classifier_free_guidance=True,
-                device=self.torch.device('cpu'),
+                device=self.torch.device(self.device),
                 max_sequence_length=128,
             )
+        embeddings = tuple(tensor.cpu() for tensor in embeddings)
         self.embeddings[prompt] = embeddings
         if len(self.embeddings) > PROMPT_CACHE_SIZE:
             self.embeddings.popitem(last=False)
@@ -93,6 +99,7 @@ class Engine:
         timings['encode'] = time.monotonic() - started
 
         def callback(pipeline, step, timestep, kwargs):
+            self.sync()
             if should_cancel():
                 raise Cancelled()
             self.progress('Generating frames', step + 1, job['steps'])
