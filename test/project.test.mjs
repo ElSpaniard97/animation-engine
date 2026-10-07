@@ -68,6 +68,20 @@ test('defaults and trims names', () => {
   assert.equal(project.shots[1].name.length, 150);
 });
 
+test('fills in settings that older projects did not have', () => {
+  const withTransition = {
+    ...ratioSchema,
+    transition: { type: 'option', values: ['cut', 'crossfade'] },
+  };
+  const text = serializeProject({ ratio: '16:9', shots: [shot] });
+  assert.equal(parseProject(text, withTransition).shots[0].settings.transition, 'cut');
+  const bad = serializeProject({
+    ratio: '16:9',
+    shots: [{ ...shot, settings: { ...settings, transition: 'wipe' } }],
+  });
+  assert.throws(() => parseProject(bad, withTransition));
+});
+
 test('rejects invalid projects', () => {
   const v2 = (shots, extra = {}) => JSON.stringify({ version: 2, ratio: '16:9', shots, ...extra });
   const cases = [

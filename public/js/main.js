@@ -5,10 +5,10 @@ import { blobToDataUrl, download } from './files.js';
 import { initGallery, refreshGallery } from './gallery.js';
 import { parseProject, schemaFromControls, serializeProject } from './project.js';
 import { OUTPUT_SIZES, drawFrame } from './renderer.js';
-import { MAX_SHOTS, formatTime, moveShot, shotAt, shotStart, totalDuration } from './shots.js';
+import { MAX_SHOTS, formatTime, frameAt, moveShot, shotStart, totalDuration } from './shots.js';
 
 // Each shot has its own camera, atmosphere, length and title; the format applies to the sequence.
-const SHOT_KEYS = ['motion', 'strength', 'effect', 'density', 'vignette', 'duration', 'title'];
+const SHOT_KEYS = ['motion', 'strength', 'effect', 'density', 'vignette', 'duration', 'transition', 'title'];
 const SAMPLE_ARTWORK = 'assets/knight.png';
 const canvas = $('canvas');
 const ctx = canvas.getContext('2d');
@@ -65,10 +65,15 @@ function showSettings(settings) {
 
 const renderSettings = (s) => ({ ...s, strength: +s.strength, density: +s.density, duration: +s.duration });
 
+const optionText = (id, value) => $(id).querySelector(`option[value="${value}"]`).text;
 const describeShot = (s) =>
-  $('motion').querySelector(`option[value="${s.motion}"]`).text +
-  ' · ' +
-  $('effect').querySelector(`option[value="${s.effect}"]`).text;
+  [
+    s.transition !== 'cut' && optionText('transition', s.transition),
+    optionText('motion', s.motion),
+    optionText('effect', s.effect),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
 /** Moves a video element to `time` and waits until that frame can be drawn. */
 function seekVideo(video, time) {
@@ -112,58 +117,94 @@ function makeShot({ name, kind, source, settings }) {
   };
 }
 
-/** Keeps generated clips in step with the playhead: only the clip on screen plays. */
-function syncVideos(active, local) {
+/** Keeps generated clips in step with the playhead: only clips on screen play. */
+function syncVideos(layers) {
+  const visible = new Set(layers.map(({ shot }) => shot));
   for (const shot of editor.shots) {
-    if (shot.kind === 'video' && shot !== active && !shot.media.paused) shot.media.pause();
+    if (shot.kind === 'video' && !visible.has(shot) && !shot.media.paused) shot.media.pause();
   }
-  if (active.kind !== 'video') return;
-  const video = active.media;
-  if (!video.duration) return;
-  // Clips shorter than their shot loop, as in the export.
-  const target = local % video.duration;
-  if (editor.playing) {
-    if (video.paused) {
-      video.loop = true;
-      video.currentTime = target;
-      video.play().catch(() => {});
+  for (const { shot, local } of layers) {
+    if (shot.kind !== 'video') continue;
+    const video = shot.media;
+    if (!video.duration) continue;
+    // Clips shorter than their shot loop, as in the export.
+    const target = local % video.duration;
+    if (editor.playing) {
+      if (video.paused) {
+        video.loop = true;
+        video.currentTime = target;
+        video.play().catch(() => {});
+      }
+    } else {
+      if (!video.paused) video.pause();
+      if (Math.abs(video.currentTime - target) > 0.05) video.currentTime = target;
     }
-  } else {
-    if (!video.paused) video.pause();
-    if (Math.abs(video.currentTime - target) > 0.05) video.currentTime = target;
   }
 }
+
+/** The shots drawn at sequence time `t`, bottom first, with how opaque the top one is. */
+function layersAt(t) {
+  const frame = frameAt(editor.shots, t);
+  const layers = [{ shot: editor.shots[frame.index], local: frame.local }];
+  if (frame.previous)
+    layers.unshift({ shot: editor.shots[frame.previous.index], local: frame.previous.local });
+  return { frame, layers };
+}
+
+function drawShot(context, shot, local) {
+  const { media } = shot;
+  drawFrame(context, {
+    t: local,
+    settings: renderSettings(shot.settings),
+    media,
+    mediaWidth: shot.kind === 'video' ? media.videoWidth : media.naturalWidth,
+    mediaHeight: shot.kind === 'video' ? media.videoHeight : media.naturalHeight,
+  });
+}
+
+// The incoming shot of a crossfade is drawn here, then laid over the outgoing one.
+const blendCanvas = document.createElement('canvas');
+const blendCtx = blendCanvas.getContext('2d');
 
 function draw() {
   if (!editor.shots.length) return;
   const total = editor.duration;
   editor.t = Math.min(editor.t, total);
-  const { index, local } = shotAt(editor.shots, editor.t);
-  const shot = editor.shots[index];
-  syncVideos(shot, local);
-  const { media } = shot;
-  const width = shot.kind === 'video' ? media.videoWidth : media.naturalWidth;
-  const height = shot.kind === 'video' ? media.videoHeight : media.naturalHeight;
-  drawFrame(ctx, {
-    t: local,
-    settings: renderSettings(shot.settings),
-    media,
-    mediaWidth: width,
-    mediaHeight: height,
-  });
+  const { frame, layers } = layersAt(editor.t);
+  syncVideos(layers);
+  const top = layers.at(-1);
+  if (frame.transition === 'crossfade') {
+    blendCanvas.width = canvas.width;
+    blendCanvas.height = canvas.height;
+    drawShot(ctx, layers[0].shot, layers[0].local);
+    drawShot(blendCtx, top.shot, top.local);
+    ctx.globalAlpha = frame.mix;
+    ctx.drawImage(blendCanvas, 0, 0);
+    ctx.globalAlpha = 1;
+  } else {
+    drawShot(ctx, top.shot, top.local);
+    if (frame.transition === 'fade') {
+      ctx.fillStyle = `rgba(0,0,0,${1 - frame.mix})`;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+  }
   $('scrub').value = (editor.t / total) * 1000;
   $('time').textContent = formatTime(editor.t);
+  const shot = editor.shots[frame.index];
   document.querySelectorAll('.clip-progress').forEach((bar, i) => {
-    bar.style.width = i === index ? (local / +shot.settings.duration) * 100 + '%' : '0';
+    bar.style.width = i === frame.index ? (frame.local / +shot.settings.duration) * 100 + '%' : '0';
   });
 }
 
-/** Draws the frame at sequence time `t` once any clip in it has reached that frame. */
+/** Draws the frame at sequence time `t` once every clip in it has reached that frame. */
 async function seekTo(t) {
   editor.t = t;
-  const { index, local } = shotAt(editor.shots, t);
-  const shot = editor.shots[index];
-  if (shot.kind === 'video' && shot.media.duration) await seekVideo(shot.media, local % shot.media.duration);
+  const { layers } = layersAt(t);
+  await Promise.all(
+    layers
+      .filter(({ shot }) => shot.kind === 'video' && shot.media.duration)
+      .map(({ shot, local }) => seekVideo(shot.media, local % shot.media.duration)),
+  );
   draw();
 }
 
