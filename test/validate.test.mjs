@@ -9,6 +9,7 @@ test('adds the preview size and default generation settings', () => {
     ...base,
     width: 448,
     height: 256,
+    resolution: 'preview',
     quality: 'standard',
     steps: 20,
     guidance: 3,
@@ -49,8 +50,26 @@ test('maps quality to steps and keeps the chosen guidance and negative prompt', 
   assert.equal(validate({ ...base, negative_prompt: '' }).negative_prompt, '');
 });
 
+test('sizes every resolution in multiples of 32 and keeps each format', () => {
+  for (const resolution of ['preview', 'medium', 'large']) {
+    for (const ratio of ['9:16', '16:9', '1:1']) {
+      const { width, height } = validate({ ...base, resolution, ratio });
+      assert.equal(width % 32, 0);
+      assert.equal(height % 32, 0);
+      const shape = ratio === '1:1' ? 'square' : ratio === '16:9' ? 'landscape' : 'portrait';
+      assert.equal(width === height ? 'square' : width > height ? 'landscape' : 'portrait', shape);
+    }
+  }
+  assert.deepEqual(
+    ['preview', 'medium', 'large'].map((resolution) => validate({ ...base, resolution }).width),
+    [448, 640, 832],
+  );
+});
+
 test('rejects bad quality, guidance and negative prompts', () => {
   for (const bad of [
+    { resolution: '4k' },
+    { resolution: 'constructor' },
     { quality: 'ultra' },
     { quality: 'toString' },
     { guidance: 0.5 },

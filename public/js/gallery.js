@@ -11,7 +11,8 @@ function el(tag, props = {}, children = []) {
 }
 
 function describe(job) {
-  const parts = [`Seed ${job.seed}`, LENGTHS[job.frames] || `${job.frames} frames`, job.ratio];
+  const size = job.width ? `${job.width}×${job.height}` : job.ratio;
+  const parts = [`Seed ${job.seed}`, LENGTHS[job.frames] || `${job.frames} frames`, size];
   if (QUALITIES[job.quality]) parts.push(QUALITIES[job.quality]);
   if (job.mode === 'image') parts.push('from image');
   return parts.join(' · ');
@@ -38,6 +39,7 @@ function reuse(job) {
   $('aiFrames').value = String(job.frames);
   $('aiMode').value = job.mode;
   $('aiQuality').value = job.quality;
+  $('aiResolution').value = job.resolution;
   $('aiGuidance').value = job.guidance;
   $('aiGuidance').dispatchEvent(new Event('input'));
   $('aiNegative').value = job.negative_prompt;

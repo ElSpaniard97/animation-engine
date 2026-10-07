@@ -3,11 +3,25 @@ const FRAME_COUNTS = [9, 25, 49];
 const MAX_SEED = 2147483647;
 const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 
-// Preview sizes LTX-Video accepts (multiples of 32) for each output format.
-const SIZES = {
-  '9:16': { width: 256, height: 448 },
-  '16:9': { width: 448, height: 256 },
-  '1:1': { width: 448, height: 448 },
+// Generation sizes LTX-Video accepts (multiples of 32) for each output format. Larger sizes look
+// sharper but take longer and need more memory: Medium has about twice Preview's pixels, Large
+// about three and a half times.
+export const SIZES = {
+  preview: {
+    '9:16': { width: 256, height: 448 },
+    '16:9': { width: 448, height: 256 },
+    '1:1': { width: 448, height: 448 },
+  },
+  medium: {
+    '9:16': { width: 352, height: 640 },
+    '16:9': { width: 640, height: 352 },
+    '1:1': { width: 576, height: 576 },
+  },
+  large: {
+    '9:16': { width: 480, height: 832 },
+    '16:9': { width: 832, height: 480 },
+    '1:1': { width: 704, height: 704 },
+  },
 };
 
 // Denoising steps per quality preset: fewer is faster, more is sharper and more coherent.
@@ -17,7 +31,7 @@ export const DEFAULT_NEGATIVE_PROMPT = 'blurry, distorted, low quality';
 
 /**
  * Checks a generation request and returns it with the worker's size, step count, guidance and
- * negative prompt. `quality`, `guidance` and `negative_prompt` are optional.
+ * negative prompt. `resolution`, `quality`, `guidance` and `negative_prompt` are optional.
  */
 export function validate(data) {
   if (typeof data.prompt !== 'string' || !data.prompt.trim() || data.prompt.length > 2000) {
@@ -32,6 +46,8 @@ export function validate(data) {
   if (data.image && !IMAGE_DATA_URL.test(data.image)) {
     throw Error('Image must be PNG, JPG, or WebP');
   }
+  const resolution = data.resolution ?? 'preview';
+  if (!Object.hasOwn(SIZES, resolution)) throw Error('Choose a supported resolution');
   const quality = data.quality ?? 'standard';
   if (!Object.hasOwn(QUALITY_STEPS, quality)) throw Error('Choose a supported quality');
   const guidance = data.guidance ?? DEFAULT_GUIDANCE;
@@ -44,7 +60,8 @@ export function validate(data) {
   }
   return {
     ...data,
-    ...SIZES[ratio],
+    ...SIZES[resolution][ratio],
+    resolution,
     quality,
     steps: QUALITY_STEPS[quality],
     guidance,
