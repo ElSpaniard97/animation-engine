@@ -283,6 +283,78 @@ canvas {
   font-size: 14px;
   color: #e4b878;
 }
+.gallery {
+  margin-top: 16px;
+}
+.gallery-grid {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+}
+.gen {
+  border: 1px solid #2f3846;
+  border-radius: 7px;
+  background: #1a202a;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.gen.current {
+  border-color: #9c7c50;
+}
+.gen-preview {
+  aspect-ratio: 16 / 9;
+  background: #0a0b0f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8d99ac;
+  font-size: 12px;
+  text-align: center;
+}
+.gen-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+.gen-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+.gen-prompt {
+  font-size: 13px;
+  line-height: 1.4;
+  color: #e3e7ee;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+}
+.gen-meta {
+  font-size: 11px;
+  color: #929aa7;
+}
+.gen-meta.failed {
+  color: #e59a8a;
+}
+.gen-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+.gen-actions button {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 12px;
+}
 .footer {
   display: flex;
   justify-content: space-between;

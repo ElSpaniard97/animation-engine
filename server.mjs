@@ -15,6 +15,7 @@ const runner = new JobRunner({
   script: resolve('engine/generate.py'),
   env: { HF_HOME: resolve('.models'), PYTORCH_ENABLE_MPS_FALLBACK: '1' },
 });
+await runner.load();
 const server = createAppServer({ port: PORT, publicDir: resolve('public'), runner });
 
 server.listen(PORT, '127.0.0.1', () => console.log(`Animation Engine: http://127.0.0.1:${PORT}`));

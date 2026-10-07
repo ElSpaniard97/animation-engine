@@ -2,6 +2,7 @@ import { initAi } from './ai.js';
 import { $ } from './dom.js';
 import { exportVideo } from './export.js';
 import { blobToDataUrl, download } from './files.js';
+import { initGallery, refreshGallery } from './gallery.js';
 import { parseProject, schemaFromControls, serializeProject } from './project.js';
 import { OUTPUT_SIZES, drawFrame } from './renderer.js';
 
@@ -118,6 +119,7 @@ function loadImage(data, name) {
   if (editor.video) {
     editor.video.pause();
     editor.video = null;
+    refreshGallery();
   }
   editor.source = data;
   setName(name);
@@ -141,6 +143,12 @@ async function loadVideo(url) {
     video.onerror = reject;
     video.load();
   });
+  // A paused video only hands the canvas a frame once it has seeked, so redraw after every seek
+  // (opening a clip, scrubbing) instead of showing a black or stale frame.
+  video.addEventListener('seeked', () => {
+    if (editor.video === video && !editor.playing) draw();
+  });
+  video.currentTime = 0.001;
   setName('Generated shot');
   $('motion').value = 'still';
   $('effect').value = 'none';
@@ -272,3 +280,4 @@ $('export').onclick = () => exportVideo(editor);
 requestAnimationFrame(tick);
 registerAgentTool();
 initAi(editor);
+initGallery(editor);

@@ -13,7 +13,7 @@ const TYPES = {
   '.mp4': 'video/mp4',
 };
 const JOB_ROUTE = /^\/api\/jobs\/([a-f0-9-]+)(\/video)?$/;
-const CANCEL_ROUTE = /^\/api\/jobs\/([a-f0-9-]+)\/cancel$/;
+const ACTION_ROUTE = /^\/api\/jobs\/([a-f0-9-]+)\/(cancel|delete)$/;
 
 /**
  * Creates the local studio server. It only answers requests addressed to the loopback app
@@ -33,13 +33,22 @@ export function createAppServer({ port, publicDir, runner }) {
         return sendJson(res, 403, { error: 'Submit from the local app' });
       }
       if (url.pathname === '/api/generate') return generate(req, res);
-      const cancel = url.pathname.match(CANCEL_ROUTE);
-      if (cancel) {
-        const job = runner.get(cancel[1]);
+      const action = url.pathname.match(ACTION_ROUTE);
+      if (action) {
+        const job = runner.get(action[1]);
         if (!job) return sendJson(res, 404, { error: 'Job not found' });
-        runner.cancel(job);
-        return sendJson(res, 200, { status: job.status });
+        if (action[2] === 'cancel') {
+          runner.cancel(job);
+          return sendJson(res, 200, { status: job.status });
+        }
+        if (!(await runner.remove(job))) {
+          return sendJson(res, 409, { error: 'Cancel the generation before deleting it' });
+        }
+        return sendJson(res, 200, { deleted: job.id });
       }
+    }
+    if (req.method === 'GET' && url.pathname === '/api/jobs') {
+      return sendJson(res, 200, { jobs: runner.list().map((job) => runner.toPublic(job)) });
     }
     const match = url.pathname.match(JOB_ROUTE);
     if (req.method === 'GET' && match) {
