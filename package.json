@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "node server.mjs",
-    "check": "node --check server.mjs && node --check public/app.js && node --check desktop.cjs && node --check scripts/build-mac.mjs",
+    "check": "node --check server.mjs && node --check desktop.cjs && node --check scripts/build-mac.mjs && for f in server/*.mjs public/js/*.js; do node --check \"$f\" || exit 1; done",
     "start": "electron .",
-    "build:mac": "node scripts/build-mac.mjs"
+    "build:mac": "node scripts/build-mac.mjs",
+    "test": "node --test test/*.test.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "engines": {
     "node": ">=20"
@@ -16,6 +19,7 @@
   "description": "Local GPU animation studio for macOS",
   "devDependencies": {
     "@electron/packager": "^20.3.0",
-    "electron": "^44.6.0"
+    "electron": "^44.6.0",
+    "prettier": "^3.9.9"
   }
 }

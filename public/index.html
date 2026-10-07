@@ -1,4 +1,154 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Animation Engine — Local AI studio</title><meta name="description" content="Animate artwork with cinematic camera movement and atmospheric effects."><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2312161e'/%3E%3Cpath d='M10 6L24 16L10 26Z' fill='%23e4b878'/%3E%3C/svg%3E"><link rel="stylesheet" href="style.css"></head><body>
-<header><a class="brand" href="./"><span class="mark">◈</span> ANIMATION <span>ENGINE</span></a><span class="workspace">Local GPU studio</span><button id="save">Save project</button><label class="button">Open project<input id="open" type="file" accept=".json" hidden></label><button class="primary" id="export">Export video ↗</button></header>
-<main><aside><div class="eyebrow">CREATIVE WORKSPACE</div><h1>Bring a still<br>to life.</h1><p class="muted">Build a cinematic shot from your artwork.</p><label class="upload" tabindex="0">＋ Add artwork<input id="upload" type="file" accept="image/*" hidden><small>PNG, JPG, WebP · stays in your browser</small></label><div class="section"><div class="eyebrow">LOCAL AI GENERATION</div><label>Describe your shot<textarea id="prompt" rows="5" maxlength="2000" placeholder="A knight turns toward an ancient doorway. His cape moves in the wind. The camera slowly pushes in through drifting mist."></textarea></label><label>Source<select id="aiMode"><option value="text">Text to video</option><option value="image">Current image to video</option></select></label><div class="pair"><label>Clip length<select id="aiFrames"><option value="9">0.4s · GPU test</option><option value="25">1 second</option><option value="49" selected>2 seconds</option></select></label><label>Seed<input id="aiSeed" type="number" min="0" max="2147483647" value="42"></label></div><button id="generate" class="primary wide">Generate on my GPU</button><button id="cancel" class="wide" hidden>Cancel generation</button><p id="aiStatus" role="status" class="note">LTX-Video · local inference · first run downloads model weights.</p><a id="aiDownload" class="button" hidden download="generated-shot.mp4">Download generated MP4</a></div><div class="section"><div class="eyebrow">01 / CAMERA</div><label>Movement<select id="motion"><option value="push">Slow push in</option><option value="pull">Slow pull out</option><option value="left">Pan left</option><option value="right">Pan right</option><option value="drift">Floating drift</option><option value="still">Locked camera</option></select></label><label>Intensity <output id="strengthValue">12%</output><input id="strength" type="range" min="0" max="30" value="12"></label></div><div class="section"><div class="eyebrow">02 / ATMOSPHERE</div><label>Effect<select id="effect"><option value="embers">Floating embers</option><option value="snow">Falling snow</option><option value="rain">Rain</option><option value="fog">Drifting mist</option><option value="none">None</option></select></label><label>Density <output id="densityValue">45%</output><input id="density" type="range" min="0" max="100" value="45"></label><label class="check"><input id="vignette" type="checkbox" checked> Cinematic vignette</label></div><div class="section"><div class="eyebrow">03 / OUTPUT</div><div class="pair"><label>Format<select id="ratio"><option value="9:16">9:16 · Vertical</option><option value="16:9">16:9 · Landscape</option><option value="1:1">1:1 · Square</option></select></label><label>Duration<select id="duration"><option value="5">5 seconds</option><option value="10" selected>10 seconds</option><option value="15">15 seconds</option></select></label></div><label>On-screen title<input id="title" placeholder="Optional title" maxlength="120"></label></div><p class="note">Camera and effects animate your image. Use Local AI Generation to create new footage.</p></aside>
-<section class="stage"><div class="stage-top"><div><span class="eyebrow">SHOT 01</span><h2 id="filename">The returning knight</h2></div><span class="pill" id="resolution">720 × 1280</span></div><div class="viewer"><canvas id="canvas" aria-label="Animated artwork preview"></canvas></div><div class="transport"><button id="play" aria-label="Play animation">▶</button><span id="time">00:00</span><input id="scrub" aria-label="Animation position" type="range" min="0" max="1000" value="0"><span id="length">00:10</span><button id="restart" aria-label="Restart animation">↺</button></div><div class="timeline"><div class="track-label">VISUAL TRACK <span>1 shot</span></div><div class="clip"><img id="thumb" src="assets/knight.png" alt="Current artwork"><div><strong id="clipName">The returning knight</strong><small id="clipDetails">Slow push in · Floating embers</small></div><span id="clipLength">10s</span></div></div><div class="footer"><span>✦ Your artwork. Your atmosphere.</span><span>Export: WebM video · 30 fps · no audio</span></div><p id="status" role="status">Ready. Adjust the shot, then press play.</p></section></main><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Animation Engine — Local AI studio</title>
+    <meta
+      name="description"
+      content="Animate artwork with cinematic camera movement and atmospheric effects."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2312161e'/%3E%3Cpath d='M10 6L24 16L10 26Z' fill='%23e4b878'/%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="./"><span class="mark">◈</span> ANIMATION <span>ENGINE</span></a
+      ><span class="workspace">Local GPU studio</span><button id="save">Save project</button
+      ><label class="button">Open project<input id="open" type="file" accept=".json" hidden /></label
+      ><button class="primary" id="export">Export video ↗</button>
+    </header>
+    <main>
+      <aside>
+        <div class="eyebrow">CREATIVE WORKSPACE</div>
+        <h1>Bring a still<br />to life.</h1>
+        <p class="muted">Build a cinematic shot from your artwork.</p>
+        <label class="upload" tabindex="0"
+          >＋ Add artwork<input id="upload" type="file" accept="image/*" hidden /><small
+            >PNG, JPG, WebP · stays in your browser</small
+          ></label
+        >
+        <div class="section">
+          <div class="eyebrow">LOCAL AI GENERATION</div>
+          <label
+            >Describe your shot<textarea
+              id="prompt"
+              rows="5"
+              maxlength="2000"
+              placeholder="A knight turns toward an ancient doorway. His cape moves in the wind. The camera slowly pushes in through drifting mist."
+            ></textarea></label
+          ><label
+            >Source<select id="aiMode">
+              <option value="text">Text to video</option>
+              <option value="image">Current image to video</option>
+            </select></label
+          >
+          <div class="pair">
+            <label
+              >Clip length<select id="aiFrames">
+                <option value="9">0.4s · GPU test</option>
+                <option value="25">1 second</option>
+                <option value="49" selected>2 seconds</option>
+              </select></label
+            ><label>Seed<input id="aiSeed" type="number" min="0" max="2147483647" value="42" /></label>
+          </div>
+          <button id="generate" class="primary wide">Generate on my GPU</button
+          ><button id="cancel" class="wide" hidden>Cancel generation</button>
+          <p id="aiStatus" role="status" class="note">
+            LTX-Video · local inference · first run downloads model weights.
+          </p>
+          <a id="aiDownload" class="button" hidden download="generated-shot.mp4">Download generated MP4</a>
+        </div>
+        <div class="section">
+          <div class="eyebrow">01 / CAMERA</div>
+          <label
+            >Movement<select id="motion">
+              <option value="push">Slow push in</option>
+              <option value="pull">Slow pull out</option>
+              <option value="left">Pan left</option>
+              <option value="right">Pan right</option>
+              <option value="drift">Floating drift</option>
+              <option value="still">Locked camera</option>
+            </select></label
+          ><label
+            >Intensity <output id="strengthValue">12%</output
+            ><input id="strength" type="range" min="0" max="30" value="12"
+          /></label>
+        </div>
+        <div class="section">
+          <div class="eyebrow">02 / ATMOSPHERE</div>
+          <label
+            >Effect<select id="effect">
+              <option value="embers">Floating embers</option>
+              <option value="snow">Falling snow</option>
+              <option value="rain">Rain</option>
+              <option value="fog">Drifting mist</option>
+              <option value="none">None</option>
+            </select></label
+          ><label
+            >Density <output id="densityValue">45%</output
+            ><input id="density" type="range" min="0" max="100" value="45" /></label
+          ><label class="check"><input id="vignette" type="checkbox" checked /> Cinematic vignette</label>
+        </div>
+        <div class="section">
+          <div class="eyebrow">03 / OUTPUT</div>
+          <div class="pair">
+            <label
+              >Format<select id="ratio">
+                <option value="9:16">9:16 · Vertical</option>
+                <option value="16:9">16:9 · Landscape</option>
+                <option value="1:1">1:1 · Square</option>
+              </select></label
+            ><label
+              >Duration<select id="duration">
+                <option value="5">5 seconds</option>
+                <option value="10" selected>10 seconds</option>
+                <option value="15">15 seconds</option>
+              </select></label
+            >
+          </div>
+          <label>On-screen title<input id="title" placeholder="Optional title" maxlength="120" /></label>
+        </div>
+        <p class="note">
+          Camera and effects animate your image. Use Local AI Generation to create new footage.
+        </p>
+      </aside>
+      <section class="stage">
+        <div class="stage-top">
+          <div>
+            <span class="eyebrow">SHOT 01</span>
+            <h2 id="filename">The returning knight</h2>
+          </div>
+          <span class="pill" id="resolution">720 × 1280</span>
+        </div>
+        <div class="viewer"><canvas id="canvas" aria-label="Animated artwork preview"></canvas></div>
+        <div class="transport">
+          <button id="play" aria-label="Play animation">▶</button><span id="time">00:00</span
+          ><input id="scrub" aria-label="Animation position" type="range" min="0" max="1000" value="0" /><span
+            id="length"
+            >00:10</span
+          ><button id="restart" aria-label="Restart animation">↺</button>
+        </div>
+        <div class="timeline">
+          <div class="track-label">VISUAL TRACK <span>1 shot</span></div>
+          <div class="clip">
+            <img id="thumb" src="assets/knight.png" alt="Current artwork" />
+            <div>
+              <strong id="clipName">The returning knight</strong
+              ><small id="clipDetails">Slow push in · Floating embers</small>
+            </div>
+            <span id="clipLength">10s</span>
+          </div>
+        </div>
+        <div class="footer">
+          <span>✦ Your artwork. Your atmosphere.</span><span>Export: WebM video · 30 fps · no audio</span>
+        </div>
+        <p id="status" role="status">Ready. Adjust the shot, then press play.</p>
+      </section>
+    </main>
+    <script type="module" src="js/main.js"></script>
+  </body>
+</html>

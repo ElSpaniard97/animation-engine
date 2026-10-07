@@ -1,0 +1,5 @@
+package-lock.json
+mac-build/
+.models/
+.jobs/
+.venv/
