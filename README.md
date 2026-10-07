@@ -41,7 +41,7 @@ python3.12 -m venv .venv
 npm run dev
 ```
 
-Enter a prompt, choose text-to-video or current-image-to-video, and click Generate on my GPU. The first generation downloads the Lightricks/LTX-Video model into `.models/`; allow roughly 27 GB for the initial model weights and substantial download time. Subsequent generations reuse that cache. Inference is local. The server listens only on loopback, validates request origin, and runs one GPU job at a time. Jobs and generated MP4s are saved under `.jobs/`. Cancel stops the worker. Generation status is held in memory; restart clears the job list, while files remain on disk.
+Enter a prompt, choose text-to-video or current-image-to-video, and click Generate on my GPU. The first generation downloads the Lightricks/LTX-Video model into `.models/`; allow roughly 27 GB for the initial model weights and substantial download time. Subsequent generations reuse that cache. Inference is local. The server listens only on loopback, validates request origin, and runs one GPU job at a time. Jobs and generated MP4s are saved under `.jobs/`, one folder per job, and Cancel stops the worker. Every generation appears in the Generations gallery under the timeline, including after a restart. From there you can open a clip in the editor, reuse its prompt and settings, or delete it along with its files.
 
 The current checkout already has its isolated Python environment installed. It uses PyTorch's MPS backend on the M4 Mac. The text encoder runs on CPU and is released before GPU denoising to reduce memory pressure. Preview presets are intentionally small (256×448, 448×256, or 448×448; 9, 25, or 49 frames at 24 fps). Generation performance and quality depend on hardware and model; this is an initial application, not feature parity with Runway.
 
@@ -53,6 +53,7 @@ The current checkout already has its isolated Python environment installed. It u
 - WebM export using browser MediaRecorder; silent, 30 fps, real-time recording.
 - Download and reopen self-contained JSON image projects.
 - Generated MP4 playback in the editor and direct MP4 download.
+- A gallery of past generations that survives restarts, with open, reuse settings and delete.
 
 Image projects save their artwork and settings. Generated video projects do not yet support JSON saving; download their MP4 instead. WebM export records a short source clip repeatedly for the selected edit duration. Chrome or Edge provides the broadest export support.
 

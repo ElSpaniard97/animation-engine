@@ -161,3 +161,50 @@ test('returns 404 for unknown jobs and routes', async () => {
   assert.equal((await call('POST', '/api/jobs/abc/cancel', { headers: fromApp() })).status, 404);
   assert.equal((await call('GET', '/api/nope')).status, 404);
 });
+
+test('lists jobs newest first with their settings', async () => {
+  const first = await call('POST', '/api/generate', { headers: fromApp(), body: job('First', { seed: 7 }) });
+  await waitFor(first.json.id, 'complete');
+  const second = await call('POST', '/api/generate', { headers: fromApp(), body: job('Second') });
+  await waitFor(second.json.id, 'complete');
+  const { jobs } = (await call('GET', '/api/jobs')).json;
+  assert.equal(jobs[0].id, second.json.id);
+  const listed = jobs.find((j) => j.id === first.json.id);
+  assert.equal(listed.prompt, 'First');
+  assert.equal(listed.seed, 7);
+  assert.equal(listed.frames, 9);
+  assert.equal(listed.ratio, '16:9');
+  assert.equal(listed.mode, 'text');
+  assert.equal(listed.status, 'complete');
+  assert.equal(listed.child, undefined);
+});
+
+test('deletes finished jobs but not running ones', async () => {
+  const done = await call('POST', '/api/generate', { headers: fromApp(), body: job('Delete me') });
+  await waitFor(done.json.id, 'complete');
+  assert.equal((await call('POST', `/api/jobs/${done.json.id}/delete`)).status, 403);
+  const deleted = await call('POST', `/api/jobs/${done.json.id}/delete`, { headers: fromApp() });
+  assert.deepEqual(deleted.json, { deleted: done.json.id });
+  assert.equal((await call('GET', '/api/jobs/' + done.json.id)).status, 404);
+  const { existsSync } = await import('node:fs');
+  assert.equal(existsSync(join(jobsDir, done.json.id)), false);
+
+  const slow = await call('POST', '/api/generate', { headers: fromApp(), body: job('slow') });
+  const busy = await call('POST', `/api/jobs/${slow.json.id}/delete`, { headers: fromApp() });
+  assert.equal(busy.status, 409);
+  await call('POST', `/api/jobs/${slow.json.id}/cancel`, { headers: fromApp() });
+  for (let i = 0; i < 100 && runner.active; i++) await new Promise((done) => setTimeout(done, 20));
+});
+
+test('a restarted server lists the same jobs', async () => {
+  const before = (await call('GET', '/api/jobs')).json.jobs;
+  // Wait for the cancelled job's status to reach disk.
+  await new Promise((done) => setTimeout(done, 50));
+  const restarted = new JobRunner({ jobsDir, python: process.execPath, script: runner.script });
+  await restarted.load();
+  const after = restarted.list().map((j) => restarted.toPublic(j));
+  assert.deepEqual(
+    after.map((j) => [j.id, j.status, j.stage, j.prompt, j.url]),
+    before.map((j) => [j.id, j.status, j.stage, j.prompt, j.url]),
+  );
+});

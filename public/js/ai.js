@@ -1,5 +1,6 @@
 import { $ } from './dom.js';
 import { imageToPngDataUrl } from './files.js';
+import { refreshGallery } from './gallery.js';
 
 const POLL_MS = 1500;
 let jobId = null;
@@ -39,6 +40,7 @@ async function generate(editor) {
     if (!response.ok) throw Error(data.error || 'Generation could not start');
     jobId = data.id;
     status('Starting local GPU…');
+    refreshGallery();
     poll(editor);
   } catch (error) {
     status(error.message);
@@ -64,6 +66,7 @@ async function poll(editor) {
       $('aiDownload').hidden = false;
       await editor.loadVideo(job.url);
     }
+    refreshGallery();
   } catch (error) {
     status('Status unavailable: ' + error.message + '. Reload to check the current job.');
     setBusy(false);
