@@ -5,7 +5,8 @@ import { JobRunner } from './server/jobs.mjs';
 
 export { validate } from './server/validate.mjs';
 
-const PORT = 5173;
+// The Mac app expects 5173; another port lets a second copy run alongside it.
+const PORT = Number(process.env.ANIMATION_ENGINE_PORT) || 5173;
 const jobsDir = resolve('.jobs');
 await mkdir(jobsDir, { recursive: true });
 
