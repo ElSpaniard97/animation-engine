@@ -2,7 +2,26 @@
 
 Independent local AI video and artwork animation workspace. No Runway connection, cloud generation API, or account required.
 
-## Run the editor
+## Launch the Mac application
+
+The installed local application is `mac-build/Animation Engine-darwin-arm64/Animation Engine.app`. Double-click it in Finder. It opens its own desktop window and starts the local server when needed. You can drag the app into the Dock for convenient access.
+
+Keep this project folder in place: the Mac launcher uses its local Python environment, downloaded model weights, and output folders. The built application records this checkout location in a local `workspace.json` file. Rebuild after moving the checkout. The build is unsigned and intended for this laptop, not distribution.
+
+To build the launcher on another Mac:
+
+```sh
+npm ci
+npm run build:mac
+```
+
+To run the desktop window directly from the source:
+
+```sh
+npm start
+```
+
+## Run the browser editor
 
 Node.js 20+:
 
@@ -44,7 +63,7 @@ npm run check
 .venv/bin/python -m py_compile engine/generate.py
 ```
 
-JavaScript and Python syntax checked; local HTTP response, playback, camera/effect controls, and GPU availability checked. The editor completed its browser WebM export. Invalid generation requests and WebMCP valid/invalid settings were also checked. Full AI inference remains pending the initial model download.
+JavaScript and Python syntax checked; local HTTP response, playback, camera/effect controls, and GPU availability checked. The editor completed its browser WebM export. Invalid generation requests and WebMCP valid/invalid settings were also checked. Local text-to-video inference succeeded on the M4 GPU: the MP4 decoded correctly at 448×256, 24 fps, 9 frames. Longer clips and image-to-video inference remain unverified.
 
 ## Model documentation
 
