@@ -497,3 +497,25 @@ textarea {
   letter-spacing: 1.5px;
   font-size: 16px;
 }
+.seed {
+  display: flex;
+  gap: 6px;
+}
+.seed input {
+  flex: 1;
+  min-width: 0;
+}
+.seed button {
+  padding: 6px 10px;
+  font-size: 18px;
+  line-height: 1;
+}
+.advanced {
+  margin: 4px 0 14px;
+}
+.advanced summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: #b5becb;
+  margin-bottom: 10px;
+}

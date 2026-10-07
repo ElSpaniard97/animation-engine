@@ -3,6 +3,18 @@ import { imageToPngDataUrl } from './files.js';
 import { refreshGallery } from './gallery.js';
 
 const POLL_MS = 1500;
+const MAX_SEED = 2147483647;
+const FORM_IDS = [
+  'generate',
+  'prompt',
+  'aiMode',
+  'aiFrames',
+  'aiSeed',
+  'randomSeed',
+  'aiQuality',
+  'aiGuidance',
+  'aiNegative',
+];
 let jobId = null;
 
 function status(text) {
@@ -10,7 +22,7 @@ function status(text) {
 }
 
 function setBusy(busy) {
-  for (const id of ['generate', 'prompt', 'aiMode', 'aiFrames', 'aiSeed']) $(id).disabled = busy;
+  for (const id of FORM_IDS) $(id).disabled = busy;
   $('cancel').hidden = !busy;
 }
 
@@ -25,6 +37,9 @@ async function generate(editor) {
       ratio: $('ratio').value,
       frames: +$('aiFrames').value,
       seed: +$('aiSeed').value,
+      quality: $('aiQuality').value,
+      guidance: +$('aiGuidance').value,
+      negative_prompt: $('aiNegative').value,
     };
     if ($('aiMode').value === 'image') {
       if (editor.video || !editor.image.naturalWidth)
@@ -88,6 +103,8 @@ async function cancel() {
 export function initAi(editor) {
   $('generate').onclick = () => generate(editor);
   $('cancel').onclick = cancel;
+  $('randomSeed').onclick = () => ($('aiSeed').value = Math.floor(Math.random() * (MAX_SEED + 1)));
+  $('aiGuidance').oninput = () => ($('aiGuidanceValue').textContent = $('aiGuidance').value);
   fetch('/api/engine')
     .then((response) => response.json())
     .then((engine) => {
