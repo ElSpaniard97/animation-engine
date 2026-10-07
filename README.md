@@ -44,7 +44,7 @@ npm run check
 .venv/bin/python -m py_compile engine/generate.py
 ```
 
-JavaScript and Python syntax checked; local HTTP response, playback, camera/effect controls, and GPU availability checked. The editor completed its browser WebM export. Full AI inference remains pending the initial model download.
+JavaScript and Python syntax checked; local HTTP response, playback, camera/effect controls, and GPU availability checked. The editor completed its browser WebM export. Invalid generation requests and WebMCP valid/invalid settings were also checked. Full AI inference remains pending the initial model download.
 
 ## Model documentation
 

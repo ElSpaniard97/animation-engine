@@ -23,9 +23,10 @@ try:
     pipe = klass.from_pretrained('Lightricks/LTX-Video', torch_dtype=dtype)
     # Encode text on the CPU and release the large encoder before GPU denoising.
     progress('Encoding prompt')
-    prompt_embeds, prompt_attention_mask, negative_prompt_embeds, negative_prompt_attention_mask = pipe.encode_prompt(
-        prompt=job['prompt'], negative_prompt='blurry, distorted, low quality', do_classifier_free_guidance=True,
-        device=torch.device('cpu'), max_sequence_length=128)
+    with torch.inference_mode():
+        prompt_embeds, prompt_attention_mask, negative_prompt_embeds, negative_prompt_attention_mask = pipe.encode_prompt(
+            prompt=job['prompt'], negative_prompt='blurry, distorted, low quality', do_classifier_free_guidance=True,
+            device=torch.device('cpu'), max_sequence_length=128)
     pipe.text_encoder = None
     gc.collect()
     pipe.to(device)
