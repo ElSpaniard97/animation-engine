@@ -3,10 +3,11 @@ import { access, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/p
 import { resolve } from 'node:path';
 import { WorkerProcess } from './worker.mjs';
 
-export class BusyError extends Error {}
+export class QueueFullError extends Error {}
 
 const JOB_ID = /^[a-f0-9-]{36}$/;
 const STATUS_FILE = 'status.json';
+export const MAX_QUEUED = 10;
 
 async function exists(path) {
   try {
@@ -33,9 +34,10 @@ function describe(config) {
 }
 
 /**
- * Runs one generation at a time on a long-running GPU worker that keeps the model loaded (see
- * worker.mjs). Each job gets its own folder under `jobsDir` with a `status.json`, so finished
- * jobs are listed again after a restart.
+ * Runs generations one at a time, in the order they were requested, on a long-running GPU worker
+ * that keeps the model loaded (see worker.mjs). Later requests wait in a queue. Each job gets its
+ * own folder under `jobsDir` with a `status.json`, so finished jobs are listed again after a
+ * restart.
  */
 export class JobRunner {
   constructor({ jobsDir, python, script, env = {}, idleMs }) {
@@ -44,10 +46,11 @@ export class JobRunner {
     this.worker = new WorkerProcess({ python, script, env, idleMs });
     this.jobs = new Map();
     this.active = null;
-    this.preparing = false;
+    this.queue = [];
+    this.saves = new Map();
   }
 
-  /** Reads the jobs saved in `jobsDir`. A job still marked running was cut off by a restart. */
+  /** Reads the jobs saved in `jobsDir`. A job still running or queued was cut off by a restart. */
   async load() {
     let entries;
     try {
@@ -78,7 +81,7 @@ export class JobRunner {
         if (!job.status && hasVideo) {
           job.status = 'complete';
           job.stage = 'Complete';
-        } else if (!job.status || job.status === 'running') {
+        } else if (!job.status || job.status === 'running' || job.status === 'queued') {
           job.status = 'failed';
           job.stage = 'Interrupted when the app closed';
         }
@@ -98,26 +101,11 @@ export class JobRunner {
     return exists(this.python);
   }
 
-  get busy() {
-    return Boolean(this.active || this.preparing);
-  }
-
-  /**
-   * Reserves the GPU while `prepare` runs (reading and validating the request), so two requests
-   * can't both start a job. `prepare` returns the validated job settings.
-   */
-  async reserve(prepare) {
-    if (this.busy) throw new BusyError('A generation is already running');
-    this.preparing = true;
-    try {
-      return await prepare();
-    } finally {
-      this.preparing = false;
-    }
-  }
-
-  /** Writes the job folder and starts the worker. Call inside `reserve`. */
+  /** Writes the job folder and queues the job; it starts as soon as the GPU is free. */
   async start(data) {
+    if (this.queue.length >= MAX_QUEUED) {
+      throw new QueueFullError(`Up to ${MAX_QUEUED} generations can wait. Try again when one starts.`);
+    }
     const id = randomUUID();
     const dir = resolve(this.jobsDir, id);
     await mkdir(dir);
@@ -127,35 +115,55 @@ export class JobRunner {
       config.image_path = resolve(dir, 'input.png');
       await writeFile(config.image_path, Buffer.from(data.image.split(',')[1], 'base64'));
     }
-    const configPath = resolve(dir, 'job.json');
-    await writeFile(configPath, JSON.stringify(config));
+    await writeFile(resolve(dir, 'job.json'), JSON.stringify(config));
 
     const job = {
       id,
-      status: 'running',
-      stage: 'Starting local GPU',
+      status: 'queued',
+      stage: 'Waiting for the GPU',
       step: null,
       total: null,
       createdAt: new Date().toISOString(),
       ...describe(config),
     };
     this.jobs.set(id, job);
-    this.active = id;
+    this.queue.push({ job, config: { id, ...config } });
     await this.#save(job);
-    this.#run(job, { id, ...config });
+    this.#next();
     return job;
   }
 
-  async #save(job) {
+  /** Starts the next queued job if the GPU is free. */
+  #next() {
+    if (this.active || !this.queue.length) return;
+    const { job, config } = this.queue.shift();
+    this.active = job.id;
+    job.status = 'running';
+    job.stage = 'Starting local GPU';
+    this.#save(job);
+    this.#run(job, config).finally(() => {
+      this.active = null;
+      this.#next();
+    });
+  }
+
+  /** Records the job's status. Writes for a job happen in order, so the newest status wins. */
+  #save(job) {
     const { status, stage, createdAt } = job;
-    try {
-      await writeFile(
+    const previous = this.saves.get(job.id) || Promise.resolve();
+    const write = previous.then(() =>
+      writeFile(
         resolve(this.jobsDir, job.id, STATUS_FILE),
         JSON.stringify({ status, stage, createdAt }),
-      );
-    } catch {
-      // The job folder was deleted; nothing to record.
-    }
+      ).catch(
+        () => {}, // The job folder was deleted; nothing to record.
+      ),
+    );
+    this.saves.set(job.id, write);
+    write.then(() => {
+      if (this.saves.get(job.id) === write) this.saves.delete(job.id);
+    });
+    return write;
   }
 
   async #run(job, config) {
@@ -165,7 +173,6 @@ export class JobRunner {
       job.step = progress.step;
       job.total = progress.total;
     });
-    if (this.active === job.id) this.active = null;
     if (outcome.timings) job.timings = outcome.timings;
     if (job.status === 'cancelled') return;
     if (outcome.result === 'complete' && (await exists(config.output_path))) {
@@ -187,12 +194,16 @@ export class JobRunner {
 
   /** All jobs, newest first. */
   list() {
-    return [...this.jobs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    // Jobs queued in the same millisecond tie on createdAt; the id keeps the order stable.
+    return [...this.jobs.values()].sort(
+      (a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
+    );
   }
 
-  /** The job as sent to the browser. */
+  /** The job as sent to the browser, with its place in line while it waits. */
   toPublic(job) {
-    return { ...job };
+    if (job.status !== 'queued') return { ...job };
+    return { ...job, position: this.queue.findIndex((entry) => entry.job === job) + 1 };
   }
 
   videoPath(job) {
@@ -200,24 +211,25 @@ export class JobRunner {
   }
 
   cancel(job) {
-    if (job.status === 'running') {
-      job.status = 'cancelled';
-      job.stage = 'Cancelled';
-      this.worker.cancel(job.id);
-      this.#save(job);
-    }
+    if (job.status !== 'running' && job.status !== 'queued') return;
+    if (job.status === 'running') this.worker.cancel(job.id);
+    else this.queue = this.queue.filter((entry) => entry.job !== job);
+    job.status = 'cancelled';
+    job.stage = 'Cancelled';
+    this.#save(job);
   }
 
-  /** Deletes a finished job and its files. Returns false if the job is still running. */
+  /** Deletes a finished job and its files. Returns false if the job is running or queued. */
   async remove(job) {
-    if (job.status === 'running') return false;
+    if (job.status === 'running' || job.status === 'queued') return false;
     this.jobs.delete(job.id);
     await rm(resolve(this.jobsDir, job.id), { recursive: true, force: true });
     return true;
   }
 
-  /** Stops the GPU worker, which also ends any running job. */
+  /** Stops the GPU worker, which also ends any running job, and drops the queue. */
   killAll() {
+    this.queue = [];
     this.worker.stop();
   }
 }

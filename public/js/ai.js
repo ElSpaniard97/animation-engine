@@ -1,11 +1,10 @@
 import { $ } from './dom.js';
 import { imageToPngDataUrl } from './files.js';
-import { refreshGallery } from './gallery.js';
+import { renderGallery } from './gallery.js';
 
 const POLL_MS = 1500;
 const MAX_SEED = 2147483647;
 const FORM_IDS = [
-  'generate',
   'prompt',
   'aiMode',
   'aiFrames',
@@ -15,22 +14,79 @@ const FORM_IDS = [
   'aiGuidance',
   'aiNegative',
 ];
-let jobId = null;
+const mine = new Set();
+let watching = false;
+let checkNow = () => {};
+let runningId = null;
 
 function status(text) {
   $('aiStatus').textContent = text;
 }
 
-function setBusy(busy) {
-  for (const id of FORM_IDS) $(id).disabled = busy;
-  $('cancel').hidden = !busy;
+/** Locks the form only while a request is being sent; generations can be queued back to back. */
+function setSubmitting(submitting) {
+  for (const id of [...FORM_IDS, 'generate']) $(id).disabled = submitting;
+}
+
+/** Updates the panel for the current queue: what is running, how many wait, and the buttons. */
+function showQueue(jobs) {
+  const running = jobs.find((job) => job.status === 'running');
+  const waiting = jobs.filter((job) => job.status === 'queued').length;
+  runningId = running?.id ?? null;
+  $('cancel').hidden = !running;
+  $('generate').textContent = running || waiting ? 'Add to queue' : 'Generate on my GPU';
+  if (!running && !waiting) return;
+  const parts = [];
+  if (running) parts.push(running.stage + (running.total ? ` · ${running.step}/${running.total}` : ''));
+  if (waiting) parts.push(`${waiting} waiting`);
+  status(parts.join(' · '));
+}
+
+/** Polls the job list while anything runs or waits, and picks up the clips this page queued. */
+async function watch(editor) {
+  if (watching) return checkNow(); // Show a newly queued job without waiting for the next poll.
+  watching = true;
+  try {
+    while (true) {
+      const response = await fetch('/api/jobs');
+      if (!response.ok) throw Error('the server did not answer');
+      const { jobs } = await response.json();
+      renderGallery(jobs);
+      showQueue(jobs);
+      // Oldest first, so clips join the timeline in the order they were requested.
+      for (const job of [...jobs].reverse()) {
+        if (!mine.has(job.id) || job.status === 'running' || job.status === 'queued') continue;
+        mine.delete(job.id);
+        if (job.status === 'complete') {
+          $('aiDownload').href = job.url;
+          $('aiDownload').hidden = false;
+          await editor.addVideoShot(job.url);
+          status('Generated clip added to the timeline.');
+        } else {
+          status(job.status === 'cancelled' ? 'Generation cancelled.' : job.stage);
+        }
+      }
+      if (!jobs.some((job) => job.status === 'running' || job.status === 'queued')) break;
+      await new Promise((resolve) => {
+        const timer = setTimeout(resolve, POLL_MS);
+        checkNow = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+      checkNow = () => {};
+    }
+  } catch (error) {
+    status('Status unavailable: ' + error.message + '. Reload to check your generations.');
+  } finally {
+    watching = false;
+  }
 }
 
 async function generate(editor) {
   const prompt = $('prompt').value.trim();
   if (!prompt) return status('Describe your shot first.');
-  setBusy(true);
-  $('aiDownload').hidden = true;
+  setSubmitting(true);
   try {
     const payload = {
       prompt,
@@ -53,45 +109,22 @@ async function generate(editor) {
     });
     const data = await response.json();
     if (!response.ok) throw Error(data.error || 'Generation could not start');
-    jobId = data.id;
-    status('Starting local GPU…');
-    refreshGallery();
-    poll(editor);
+    // Clips this page asked for are added to the timeline when they finish.
+    mine.add(data.id);
+    status(data.status === 'queued' ? `Added to the queue (#${data.position}).` : 'Starting local GPU…');
+    watch(editor);
   } catch (error) {
     status(error.message);
-    setBusy(false);
+  } finally {
+    setSubmitting(false);
   }
 }
 
-async function poll(editor) {
-  if (!jobId) return;
-  try {
-    const response = await fetch('/api/jobs/' + jobId);
-    const job = await response.json();
-    if (!response.ok) throw Error(job.error);
-    status(job.stage + (job.total ? ' · ' + job.step + '/' + job.total : ''));
-    if (job.status === 'running') {
-      setTimeout(() => poll(editor), POLL_MS);
-      return;
-    }
-    setBusy(false);
-    jobId = null;
-    if (job.status === 'complete') {
-      $('aiDownload').href = job.url;
-      $('aiDownload').hidden = false;
-      await editor.addVideoShot(job.url);
-    }
-    refreshGallery();
-  } catch (error) {
-    status('Status unavailable: ' + error.message + '. Reload to check the current job.');
-    setBusy(false);
-  }
-}
-
+/** Cancels the generation that is running now; queued ones are cancelled from the gallery. */
 async function cancel() {
-  if (!jobId) return;
+  if (!runningId) return;
   try {
-    const response = await fetch('/api/jobs/' + jobId + '/cancel', { method: 'POST' });
+    const response = await fetch('/api/jobs/' + runningId + '/cancel', { method: 'POST' });
     if (!response.ok) throw Error();
     status('Cancelling…');
   } catch {
@@ -99,7 +132,7 @@ async function cancel() {
   }
 }
 
-/** Wires the Local AI Generation panel and resumes watching a job that is already running. */
+/** Wires the Local AI Generation panel and resumes watching any queue that is already going. */
 export function initAi(editor) {
   $('generate').onclick = () => generate(editor);
   $('cancel').onclick = cancel;
@@ -108,13 +141,8 @@ export function initAi(editor) {
   fetch('/api/engine')
     .then((response) => response.json())
     .then((engine) => {
-      if (engine.active) {
-        jobId = engine.active;
-        setBusy(true);
-        poll(editor);
-      } else if (!engine.installed) {
-        status('Local runtime needs installation. See README.');
-      }
+      if (!engine.installed) status('Local runtime needs installation. See README.');
+      watch(editor);
     })
     .catch(() => status('Start the local app server to use AI generation.'));
 }

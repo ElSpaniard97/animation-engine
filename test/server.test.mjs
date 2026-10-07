@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { createAppServer } from '../server/app.mjs';
-import { JobRunner } from '../server/jobs.mjs';
+import { JobRunner, MAX_QUEUED } from '../server/jobs.mjs';
 
 let port, server, runner, jobsDir;
 
@@ -43,7 +43,7 @@ const job = (prompt, extra = {}) => ({ prompt, ratio: '16:9', frames: 9, seed: 1
 async function waitFor(id, status) {
   for (let i = 0; i < 100; i++) {
     const res = await call('GET', '/api/jobs/' + id);
-    if (res.json.status !== 'running' || status === 'running') {
+    if (!['running', 'queued'].includes(res.json.status) || status === res.json.status) {
       if (!status || res.json.status === status) return res.json;
     }
     await new Promise((done) => setTimeout(done, 20));
@@ -155,21 +155,50 @@ test('keeps one worker loaded across jobs', async () => {
   assert.equal(runner.worker.pid, pids[0]);
 });
 
-test('runs one job at a time and cancels', async () => {
+const settle = async () => {
+  for (let i = 0; i < 200 && (runner.active || runner.queue.length); i++) {
+    await new Promise((done) => setTimeout(done, 20));
+  }
+};
+
+test('queues jobs behind the running one and cancels either', async () => {
   const slow = await call('POST', '/api/generate', { headers: fromApp(), body: job('slow') });
   assert.equal(slow.status, 202);
   assert.equal((await call('GET', '/api/engine')).json.active, slow.json.id);
-  const second = await call('POST', '/api/generate', { headers: fromApp(), body: job('A knight') });
-  assert.equal(second.status, 409);
+  const second = await call('POST', '/api/generate', { headers: fromApp(), body: job('Second') });
+  const third = await call('POST', '/api/generate', { headers: fromApp(), body: job('Third') });
+  assert.equal(second.status, 202);
+  assert.deepEqual([second.json.status, second.json.position], ['queued', 1]);
+  assert.deepEqual([third.json.status, third.json.position], ['queued', 2]);
+
+  // Cancelling a queued job moves the ones behind it up.
+  const dropped = await call('POST', `/api/jobs/${second.json.id}/cancel`, { headers: fromApp() });
+  assert.deepEqual(dropped.json, { status: 'cancelled' });
+  assert.equal((await call('GET', '/api/jobs/' + third.json.id)).json.position, 1);
+  assert.equal((await call('POST', `/api/jobs/${third.json.id}/delete`, { headers: fromApp() })).status, 409);
 
   const cancel = await call('POST', `/api/jobs/${slow.json.id}/cancel`, { headers: fromApp() });
   assert.deepEqual(cancel.json, { status: 'cancelled' });
-  for (let i = 0; i < 100 && runner.active; i++) await new Promise((done) => setTimeout(done, 20));
-  assert.equal(runner.active, null);
+  // The next job in line starts once the GPU is free.
+  assert.equal((await waitFor(third.json.id, 'complete')).status, 'complete');
   assert.equal((await call('GET', '/api/jobs/' + slow.json.id)).json.stage, 'Cancelled');
-  const next = await call('POST', '/api/generate', { headers: fromApp(), body: job('A knight') });
-  assert.equal(next.status, 202);
-  await waitFor(next.json.id, 'complete');
+  assert.equal((await call('GET', '/api/jobs/' + second.json.id)).json.status, 'cancelled');
+  await settle();
+  assert.equal(runner.active, null);
+});
+
+test('limits how many jobs can wait', async () => {
+  const slow = await call('POST', '/api/generate', { headers: fromApp(), body: job('slow') });
+  const waiting = [];
+  for (let i = 0; i < MAX_QUEUED; i++) {
+    waiting.push((await call('POST', '/api/generate', { headers: fromApp(), body: job('Wait ' + i) })).json);
+  }
+  const full = await call('POST', '/api/generate', { headers: fromApp(), body: job('One too many') });
+  assert.equal(full.status, 409);
+  assert.match(full.json.error, /Up to 10/);
+  for (const { id } of waiting) await call('POST', `/api/jobs/${id}/cancel`, { headers: fromApp() });
+  await call('POST', `/api/jobs/${slow.json.id}/cancel`, { headers: fromApp() });
+  await settle();
 });
 
 test('returns 404 for unknown jobs and routes', async () => {
@@ -209,7 +238,7 @@ test('deletes finished jobs but not running ones', async () => {
   const busy = await call('POST', `/api/jobs/${slow.json.id}/delete`, { headers: fromApp() });
   assert.equal(busy.status, 409);
   await call('POST', `/api/jobs/${slow.json.id}/cancel`, { headers: fromApp() });
-  for (let i = 0; i < 100 && runner.active; i++) await new Promise((done) => setTimeout(done, 20));
+  await settle();
 });
 
 test('a restarted server lists the same jobs', async () => {

@@ -19,8 +19,8 @@ function describe(job) {
 
 function preview(job) {
   if (job.status !== 'complete') {
-    const label =
-      job.status === 'running' ? 'Generating…' : job.status === 'cancelled' ? 'Cancelled' : 'Failed';
+    const labels = { running: 'Generating…', queued: `Queued · #${job.position}`, cancelled: 'Cancelled' };
+    const label = labels[job.status] || 'Failed';
     return el('div', { className: 'gen-preview', textContent: label });
   }
   // #t= asks the browser to show a frame from inside the clip instead of a blank first frame.
@@ -51,6 +51,17 @@ async function open(job) {
   await editor.loadVideo(job.url);
   $('aiDownload').href = job.url;
   $('aiDownload').hidden = false;
+  refreshGallery();
+}
+
+async function cancel(job) {
+  try {
+    const response = await fetch('/api/jobs/' + job.id + '/cancel', { method: 'POST' });
+    if (!response.ok) throw Error((await response.json()).error);
+    editor.message('Generation cancelled.');
+  } catch (error) {
+    editor.message('Could not cancel: ' + error.message);
+  }
   refreshGallery();
 }
 
@@ -88,8 +99,9 @@ function card(job) {
   actions.push(
     el('button', { textContent: 'Reuse', title: 'Copy the prompt and settings', onclick: () => reuse(job) }),
   );
-  if (job.status !== 'running')
-    actions.push(el('button', { textContent: 'Delete', onclick: () => remove(job) }));
+  if (job.status === 'running' || job.status === 'queued')
+    actions.push(el('button', { textContent: 'Cancel', onclick: () => cancel(job) }));
+  else actions.push(el('button', { textContent: 'Delete', onclick: () => remove(job) }));
 
   const meta = el('div', { className: 'gen-meta', textContent: describe(job) });
   const body = [el('p', { className: 'gen-prompt', textContent: job.prompt, title: job.prompt }), meta];
@@ -102,15 +114,26 @@ function card(job) {
   ]);
 }
 
+let shown = '';
+
+/** Shows `jobs`, rebuilding the cards only when something a card shows has changed. */
+export function renderGallery(jobs) {
+  const loaded = editor.video?.src ?? '';
+  const signature = JSON.stringify([loaded, jobs.map((job) => [job.id, job.status, job.position])]);
+  if (signature === shown) return;
+  shown = signature;
+  $('gallery').hidden = jobs.length === 0;
+  $('galleryCount').textContent = jobs.length === 1 ? '1 clip' : jobs.length + ' clips';
+  $('galleryGrid').replaceChildren(...jobs.map(card));
+}
+
 /** Reloads the list of generations from the server. */
 export async function refreshGallery() {
   try {
     const response = await fetch('/api/jobs');
     if (!response.ok) return;
-    const { jobs } = await response.json();
-    $('gallery').hidden = jobs.length === 0;
-    $('galleryCount').textContent = jobs.length === 1 ? '1 clip' : jobs.length + ' clips';
-    $('galleryGrid').replaceChildren(...jobs.map(card));
+    shown = ''; // An explicit refresh always redraws, e.g. after the loaded clip changes.
+    renderGallery((await response.json()).jobs);
   } catch {
     // Without the server there is nothing to list; the AI panel already says so.
   }

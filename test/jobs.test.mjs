@@ -30,6 +30,7 @@ test('restores saved jobs and marks interrupted ones', async () => {
     await makeJob(dir, ID(4));
     await makeJob(dir, ID(5), { status: { ...done, status: 'failed', stage: 'Failed: out of memory' } });
     await makeJob(dir, ID(6), { status: done });
+    await makeJob(dir, ID(9), { status: { ...done, status: 'queued', stage: 'Waiting for the GPU' } });
     const advanced = { quality: 'high', guidance: 6.5, negative_prompt: 'text' };
     await makeJob(dir, ID(8), { status: done, video: true, settings: advanced });
     await mkdir(join(dir, 'not-a-job'));
@@ -38,7 +39,7 @@ test('restores saved jobs and marks interrupted ones', async () => {
     const runner = new JobRunner({ jobsDir: dir, python: 'none', script: 'none' });
     await runner.load();
     const byId = Object.fromEntries(runner.list().map((j) => [j.id, j]));
-    assert.deepEqual(Object.keys(byId).sort(), [1, 2, 3, 4, 5, 6, 8].map(ID));
+    assert.deepEqual(Object.keys(byId).sort(), [1, 2, 3, 4, 5, 6, 8, 9].map(ID));
 
     assert.equal(byId[ID(1)].status, 'complete');
     assert.equal(byId[ID(1)].url, `/api/jobs/${ID(1)}/video`);
@@ -50,6 +51,11 @@ test('restores saved jobs and marks interrupted ones', async () => {
     assert.equal(byId[ID(4)].status, 'failed');
     assert.equal(byId[ID(5)].stage, 'Failed: out of memory');
     assert.equal(byId[ID(6)].stage, 'Video file is missing');
+    assert.equal(
+      byId[ID(9)].stage,
+      'Interrupted when the app closed',
+      'the queue does not survive a restart',
+    );
     const { quality, guidance, negative_prompt } = byId[ID(8)];
     assert.deepEqual({ quality, guidance, negative_prompt }, advanced);
     assert.equal(byId[ID(1)].quality, 'standard', 'older jobs report the settings they ran with');
