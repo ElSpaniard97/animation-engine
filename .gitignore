@@ -9,3 +9,4 @@ public/assets/
 .jobs/
 __pycache__/
 app-preview.jpg
+mac-build/

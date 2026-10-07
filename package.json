@@ -1,1 +1,21 @@
-{"name":"animation-engine","version":"0.1.0","private":true,"type":"module","scripts":{"dev":"node server.mjs","check":"node --check server.mjs && node --check public/app.js"},"engines":{"node":">=20"}}
+{
+  "name": "animation-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "check": "node --check server.mjs && node --check public/app.js && node --check desktop.cjs && node --check scripts/build-mac.mjs",
+    "start": "electron .",
+    "build:mac": "node scripts/build-mac.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "desktop.cjs",
+  "description": "Local GPU animation studio for macOS",
+  "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^44.6.0"
+  }
+}
