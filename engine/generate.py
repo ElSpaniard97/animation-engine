@@ -35,7 +35,7 @@ try:
         return kwargs
     args = dict(prompt_embeds=prompt_embeds.to(device), prompt_attention_mask=prompt_attention_mask.to(device),
         negative_prompt_embeds=negative_prompt_embeds.to(device), negative_prompt_attention_mask=negative_prompt_attention_mask.to(device),
-        width=job['width'], height=job['height'], num_frames=job['frames'], num_inference_steps=job['steps'],
+        width=job['width'], height=job['height'], num_frames=job['frames'], frame_rate=24, num_inference_steps=job['steps'],
         guidance_scale=3.0, generator=torch.Generator(device='cpu').manual_seed(job['seed']),
         callback_on_step_end=callback)
     if job.get('image_path'):
