@@ -49,7 +49,7 @@ The current checkout already has its isolated Python environment installed. It u
 
 ## Editor features
 
-- A timeline of shots played back to back: add, reorder and delete shots, each with its own artwork or generated clip, camera, atmosphere, length (2–15 seconds) and title.
+- A timeline of shots played back to back: add, reorder and delete shots, each with its own artwork or generated clip, camera, atmosphere, length (2–15 seconds), title, and a cut, crossfade or fade from black into it (half a second).
 - Image import; six camera movements; embers, snow, rain and mist.
 - Portrait, landscape and square formats for the whole video.
 - Live preview, playback and scrubbing; titles and vignette.

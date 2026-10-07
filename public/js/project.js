@@ -47,10 +47,20 @@ function checkSettings(settings, schema) {
 
 const cleanName = (name, fallback) => String(name || fallback).slice(0, 150);
 
+// Settings added after a project format shipped, with the value older files implicitly used.
+const SETTING_DEFAULTS = { transition: 'cut' };
+
 function parseShot(shot, schema, number) {
   if (!shot || typeof shot !== 'object') throw Error('Invalid shot');
-  checkSettings(shot.settings, schema);
-  const parsed = { name: cleanName(shot.name, 'Shot ' + number), settings: shot.settings };
+  let settings = shot.settings;
+  if (settings && typeof settings === 'object') {
+    settings = { ...settings };
+    for (const [key, value] of Object.entries(SETTING_DEFAULTS)) {
+      if (key in schema && settings[key] === undefined) settings[key] = value;
+    }
+  }
+  checkSettings(settings, schema);
+  const parsed = { name: cleanName(shot.name, 'Shot ' + number), settings };
   if (typeof shot.artwork === 'string' && ARTWORK_DATA_URL.test(shot.artwork)) parsed.artwork = shot.artwork;
   else if (typeof shot.video === 'string' && GENERATED_VIDEO.test(shot.video)) parsed.video = shot.video;
   else throw Error('Missing artwork');

@@ -43,3 +43,24 @@ export function formatTime(seconds) {
   const whole = Math.max(0, Math.floor(seconds));
   return Math.floor(whole / 60) + ':' + String(whole % 60).padStart(2, '0');
 }
+
+export const TRANSITION_SECONDS = 0.5;
+
+/**
+ * What is on screen at sequence time `t`: the shot under the playhead plus, during the first
+ * TRANSITION_SECONDS of a shot that fades or crossfades in, how far in it is (`mix`, 0–1).
+ * A crossfade blends from the previous shot, which keeps playing past its end (`previous`);
+ * the first shot has nothing to blend from, so it fades in from black instead.
+ */
+export function frameAt(shots, t) {
+  const at = shotAt(shots, t);
+  if (!at) return null;
+  const transition = shots[at.index].settings.transition || 'cut';
+  if (transition === 'cut' || at.local >= TRANSITION_SECONDS) return { ...at, transition: 'cut', mix: 1 };
+  const mix = at.local / TRANSITION_SECONDS;
+  if (transition === 'crossfade' && at.index > 0) {
+    const index = at.index - 1;
+    return { ...at, transition, mix, previous: { index, local: length(shots[index]) + at.local } };
+  }
+  return { ...at, transition: 'fade', mix };
+}
