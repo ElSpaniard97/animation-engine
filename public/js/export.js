@@ -1,4 +1,5 @@
 import { $ } from './dom.js';
+import { encodeMusic, findAudioCodec, muxerAudioConfig } from './audio.js';
 import { download } from './files.js';
 
 const FPS = 30;
@@ -42,7 +43,8 @@ export async function findMp4Codec(width, height) {
 /** Shows which format Export will produce. */
 export async function describeExportFormat() {
   const mp4 = await findMp4Codec(1280, 720);
-  $('exportFormat').textContent = `Export: ${mp4 ? 'MP4' : 'WebM'} video · ${FPS} fps · no audio`;
+  const audio = mp4 && (await findAudioCodec()) ? 'music included' : 'no audio';
+  $('exportFormat').textContent = `Export: ${mp4 ? 'MP4' : 'WebM'} video · ${FPS} fps · ${audio}`;
 }
 
 /**
@@ -55,11 +57,17 @@ async function exportMp4(editor, codec) {
   const { width, height } = editor.canvas;
   const { duration } = editor;
   const frameCount = Math.round(duration * FPS);
+  const audioCodec = editor.music ? await findAudioCodec() : null;
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: codec.muxer, width, height, frameRate: FPS },
+    audio: audioCodec ? muxerAudioConfig(audioCodec) : undefined,
     fastStart: 'in-memory',
   });
+  if (audioCodec) {
+    editor.message('Exporting MP4… mixing music');
+    await encodeMusic(editor.music, duration, audioCodec, muxer);
+  }
   let failure = null;
   const encoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
@@ -82,7 +90,12 @@ async function exportMp4(editor, codec) {
   if (failure) throw failure;
   muxer.finalize();
   download(new Blob([muxer.target.buffer], { type: 'video/mp4' }), 'animation-engine-shot.mp4');
-  editor.message(`Video downloaded. MP4 · ${describeLength(editor)} · no audio.`);
+  const sound = audioCodec
+    ? 'with music'
+    : editor.music
+      ? 'no audio (this browser cannot encode it)'
+      : 'no audio';
+  editor.message(`Video downloaded. MP4 · ${describeLength(editor)} · ${sound}.`);
 }
 
 /**

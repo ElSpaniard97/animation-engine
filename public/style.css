@@ -519,3 +519,24 @@ textarea {
   color: #b5becb;
   margin-bottom: 10px;
 }
+.music-name {
+  margin: 0 0 10px;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.music-name span:first-child,
+.music-track {
+  color: #e4b878;
+}
+.music-track {
+  margin-top: 8px;
+  padding: 7px 10px;
+  border: 1px dashed #5b4a32;
+  border-radius: 7px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

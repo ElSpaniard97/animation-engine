@@ -50,11 +50,12 @@ The current checkout already has its isolated Python environment installed. It u
 ## Editor features
 
 - A timeline of shots played back to back: add, reorder and delete shots, each with its own artwork or generated clip, camera, atmosphere, length (2–15 seconds), title, and a cut, crossfade or fade from black into it (half a second).
+- A music track under the whole video, with volume and a fade-out at the end. It plays with the preview and is mixed into MP4 exports (AAC where the browser supports it, otherwise Opus); WebM fallback exports stay silent.
 - Image import; six camera movements; embers, snow, rain and mist.
 - Portrait, landscape and square formats for the whole video.
 - Live preview, playback and scrubbing; titles and vignette.
-- MP4 export (H.264 where the browser supports it, otherwise VP9), rendered frame by frame with WebCodecs, so it's exact and usually faster than real time. It's silent and 30 fps. Browsers without WebCodecs fall back to real-time WebM recording.
-- Download and reopen JSON projects with every shot.
+- MP4 export (H.264 where the browser supports it, otherwise VP9), rendered frame by frame with WebCodecs, so it's exact and usually faster than real time. It's 30 fps, with the music track when there is one. Browsers without WebCodecs fall back to real-time WebM recording.
+- Download and reopen JSON projects with every shot and the music track.
 - Generated MP4 playback in the editor and direct MP4 download.
 - A gallery of past generations that survives restarts, with use in a shot, add as a shot, reuse settings and delete.
 
