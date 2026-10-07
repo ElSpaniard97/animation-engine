@@ -56,14 +56,27 @@ The current checkout already has its isolated Python environment installed. It u
 
 Image projects save their artwork and settings. Generated video projects do not yet support JSON saving; download their MP4 instead. WebM export records a short source clip repeatedly for the selected edit duration. Chrome or Edge provides the broadest export support.
 
-## Verification
+## Development
 
 ```sh
-npm run check
+npm ci              # once: installs Electron, the packager and Prettier
+npm test            # unit tests and server tests with a stand-in GPU worker
+npm run check       # syntax check
+npm run format      # Prettier
 .venv/bin/python -m py_compile engine/generate.py
 ```
 
-JavaScript and Python syntax checked; local HTTP response, playback, camera/effect controls, and GPU availability checked. The editor completed its browser WebM export. Invalid generation requests and WebMCP valid/invalid settings were also checked. Local text-to-video inference succeeded on the M4 GPU: the MP4 decoded correctly at 448×256, 24 fps, 9 frames. Longer clips and image-to-video inference remain unverified.
+The tests need no GPU or Python: `test/fixtures/fake-worker.mjs` speaks the same progress protocol as `engine/generate.py`.
+
+Code layout:
+
+- `server.mjs`: starts the local server on 127.0.0.1:5173.
+- `server/`: request routing and host/origin checks (`app.mjs`), the one-at-a-time GPU job runner (`jobs.mjs`), request validation (`validate.mjs`), and JSON and byte-range file helpers (`http.mjs`).
+- `engine/generate.py`: the LTX-Video worker, run once per job.
+- `public/js/`: the editor. `main.js` holds state and wires the controls, `renderer.js` draws frames, `project.js` saves and opens projects, `ai.js` runs the generation panel, and `export.js` records WebM.
+- `desktop.cjs` and `scripts/build-mac.mjs`: the Mac app.
+
+Local text-to-video inference succeeded on the M4 GPU: the MP4 decoded correctly at 448×256, 24 fps, 9 frames. Longer clips and image-to-video inference remain unverified.
 
 ## Model documentation
 
