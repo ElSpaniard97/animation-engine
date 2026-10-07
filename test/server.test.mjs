@@ -75,6 +75,8 @@ test('serves the editor and blocks other hosts and paths outside public/', async
   assert.match(page.headers['content-type'], /text\/html/);
   assert.match(page.raw.toString(), /js\/main\.js/);
   assert.equal((await call('GET', '/js/main.js')).headers['content-type'], 'text/javascript; charset=utf-8');
+  const vendor = await call('GET', '/vendor/mp4-muxer/mp4-muxer.mjs');
+  assert.equal(vendor.headers['content-type'], 'text/javascript; charset=utf-8');
   assert.equal((await call('GET', '/', { headers: { host: 'evil.test' } })).status, 403);
   assert.equal((await call('GET', '/..%2fserver.mjs')).status, 403);
   assert.equal((await call('GET', '/missing.js')).status, 404);

@@ -3,3 +3,4 @@ mac-build/
 .models/
 .jobs/
 .venv/
+public/vendor/
