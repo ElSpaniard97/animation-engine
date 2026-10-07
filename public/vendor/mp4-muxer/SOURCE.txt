@@ -1,0 +1,2 @@
+mp4-muxer 5.2.2 (MIT), copied unmodified from the npm package build/mp4-muxer.mjs so the editor works offline without a bundler.
+https://github.com/Vanilagy/mp4-muxer

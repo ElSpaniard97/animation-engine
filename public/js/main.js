@@ -1,6 +1,6 @@
 import { initAi } from './ai.js';
 import { $ } from './dom.js';
-import { exportVideo } from './export.js';
+import { describeExportFormat, exportVideo } from './export.js';
 import { blobToDataUrl, download } from './files.js';
 import { initGallery, refreshGallery } from './gallery.js';
 import { parseProject, schemaFromControls, serializeProject } from './project.js';
@@ -281,3 +281,4 @@ requestAnimationFrame(tick);
 registerAgentTool();
 initAi(editor);
 initGallery(editor);
+describeExportFormat();

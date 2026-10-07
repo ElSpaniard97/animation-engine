@@ -52,12 +52,12 @@ The current checkout already has its isolated Python environment installed. It u
 - Image import; six camera movements; embers, snow, rain and mist.
 - Portrait, landscape and square formats; 5–15 second animated image shots.
 - Live preview, playback and scrubbing; titles and vignette.
-- WebM export using browser MediaRecorder; silent, 30 fps, real-time recording.
+- MP4 export (H.264 where the browser supports it, otherwise VP9), rendered frame by frame with WebCodecs, so it's exact and usually faster than real time. It's silent and 30 fps. Browsers without WebCodecs fall back to real-time WebM recording.
 - Download and reopen self-contained JSON image projects.
 - Generated MP4 playback in the editor and direct MP4 download.
 - A gallery of past generations that survives restarts, with open, reuse settings and delete.
 
-Image projects save their artwork and settings. Generated video projects do not yet support JSON saving; download their MP4 instead. WebM export records a short source clip repeatedly for the selected edit duration. Chrome or Edge provides the broadest export support.
+Image projects save their artwork and settings. Generated video projects do not yet support JSON saving; download their MP4 instead. Export loops a short generated clip for the selected edit duration. Chrome or Edge provides the broadest export support.
 
 ## Development
 
@@ -76,7 +76,7 @@ Code layout:
 - `server.mjs`: starts the local server on 127.0.0.1:5173.
 - `server/`: request routing and host/origin checks (`app.mjs`), the one-at-a-time GPU job runner (`jobs.mjs`), request validation (`validate.mjs`), and JSON and byte-range file helpers (`http.mjs`).
 - `engine/ltx_engine.py`: loads LTX-Video and renders a job. `engine/worker.py` keeps it loaded and takes jobs from the server (`server/worker.mjs`), and `engine/generate.py` runs one job from the command line.
-- `public/js/`: the editor. `main.js` holds state and wires the controls, `renderer.js` draws frames, `project.js` saves and opens projects, `ai.js` runs the generation panel, and `export.js` records WebM.
+- `public/js/`: the editor. `main.js` holds state and wires the controls, `renderer.js` draws frames, `project.js` saves and opens projects, `ai.js` runs the generation panel, and `export.js` renders MP4 (with `public/vendor/mp4-muxer`) or records WebM.
 - `desktop.cjs` and `scripts/build-mac.mjs`: the Mac app.
 
 Local text-to-video inference succeeded on the M4 GPU: the MP4 decoded correctly at 448×256, 24 fps, 9 frames. Longer clips and image-to-video inference remain unverified.
