@@ -12,6 +12,11 @@ const MP4_CODECS = [
   { codec: 'vp09.00.40.08', muxer: 'vp9' },
 ];
 
+function describeLength(editor) {
+  const shots = editor.shots.length;
+  return `${editor.duration} seconds` + (shots > 1 ? ` · ${shots} shots` : '');
+}
+
 function setControlsDisabled(disabled) {
   document.querySelectorAll('button,input,select').forEach((el) => (el.disabled = disabled));
 }
@@ -40,16 +45,6 @@ export async function describeExportFormat() {
   $('exportFormat').textContent = `Export: ${mp4 ? 'MP4' : 'WebM'} video · ${FPS} fps · no audio`;
 }
 
-/** Moves a video element to `time` and waits until that frame can be drawn. */
-function seek(video, time) {
-  if (Math.abs(video.currentTime - time) < 0.001) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    video.addEventListener('seeked', resolve, { once: true });
-    video.addEventListener('error', reject, { once: true });
-    video.currentTime = time;
-  });
-}
-
 /**
  * Renders the shot frame by frame with WebCodecs and muxes it into an MP4. Each frame is drawn at
  * its exact time, so the result doesn't depend on playback speed or the tab being visible, and it
@@ -57,9 +52,8 @@ function seek(video, time) {
  */
 async function exportMp4(editor, codec) {
   const { Muxer, ArrayBufferTarget } = await import('../vendor/mp4-muxer/mp4-muxer.mjs');
-  const { canvas, video } = editor;
-  const { width, height } = canvas;
-  const duration = +$('duration').value;
+  const { width, height } = editor.canvas;
+  const { duration } = editor;
   const frameCount = Math.round(duration * FPS);
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -73,14 +67,10 @@ async function exportMp4(editor, codec) {
   });
   encoder.configure({ codec: codec.codec, width, height, bitrate: BITRATE, framerate: FPS });
 
-  video?.pause();
   for (let i = 0; i < frameCount; i++) {
     if (failure) throw failure;
-    editor.t = i / FPS;
-    // Generated clips loop at their own length, as in the preview.
-    if (video) await seek(video, editor.t % video.duration);
-    editor.draw();
-    const frame = new VideoFrame(canvas, { timestamp: (i * 1e6) / FPS, duration: 1e6 / FPS });
+    await editor.seekTo(i / FPS);
+    const frame = new VideoFrame(editor.canvas, { timestamp: (i * 1e6) / FPS, duration: 1e6 / FPS });
     encoder.encode(frame, { keyFrame: i % KEYFRAME_EVERY === 0 });
     frame.close();
     // Let the encoder catch up instead of queueing every frame in memory.
@@ -92,7 +82,7 @@ async function exportMp4(editor, codec) {
   if (failure) throw failure;
   muxer.finalize();
   download(new Blob([muxer.target.buffer], { type: 'video/mp4' }), 'animation-engine-shot.mp4');
-  editor.message(`Video downloaded. MP4 · ${duration} seconds · no audio.`);
+  editor.message(`Video downloaded. MP4 · ${describeLength(editor)} · no audio.`);
 }
 
 /**
@@ -112,7 +102,7 @@ function recordWebm(editor, mime) {
     recording.onstop = () => {
       stopTracks();
       download(new Blob(chunks, { type: mime }), 'animation-engine-shot.webm');
-      editor.message('Video downloaded. WebM · ' + $('duration').value + ' seconds · no audio.');
+      editor.message(`Video downloaded. WebM · ${describeLength(editor)} · no audio.`);
       resolve();
     };
     recording.onerror = () => {
@@ -120,13 +110,9 @@ function recordWebm(editor, mime) {
       reject(Error('Recording failed'));
     };
     recording.start();
-    const start = editor.video
-      ? Object.assign(editor.video, { currentTime: 0, loop: true }).play()
-      : Promise.resolve();
-    start.then(() => {
-      editor.playing = true;
-      editor.message('Exporting your shot in real time. Keep this tab visible.');
-    }, reject);
+    // The editor's playback loop plays generated clips along with the sequence.
+    editor.playing = true;
+    editor.message('Exporting your video in real time. Keep this tab visible.');
   });
 }
 
@@ -143,8 +129,7 @@ export async function exportVideo(editor) {
   editor.exporting = true;
   editor.playing = false;
   $('play').textContent = '▶';
-  editor.t = 0;
-  editor.draw();
+  await editor.seekTo(0);
   setControlsDisabled(true);
   try {
     if (codec) await exportMp4(editor, codec);
@@ -154,13 +139,8 @@ export async function exportVideo(editor) {
   } finally {
     editor.exporting = false;
     editor.playing = false;
-    if (editor.video) {
-      editor.video.pause();
-      editor.video.loop = false;
-    }
-    editor.t = 0;
-    if (editor.video) await seek(editor.video, 0).catch(() => {});
-    editor.draw();
+    editor.shots.forEach((shot) => shot.media.pause?.());
+    await editor.seekTo(0).catch(() => {});
     setControlsDisabled(false);
   }
 }

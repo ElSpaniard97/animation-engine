@@ -41,23 +41,24 @@ python3.12 -m venv .venv
 npm run dev
 ```
 
-Enter a prompt, choose text-to-video or current-image-to-video, and click Generate on my GPU. The first generation downloads the Lightricks/LTX-Video model into `.models/`; allow roughly 27 GB for the initial model weights and substantial download time. Subsequent generations reuse that cache. Inference is local. The server listens only on loopback, validates request origin, and runs one GPU job at a time. Jobs and generated MP4s are saved under `.jobs/`, one folder per job, and Cancel stops the worker. Every generation appears in the Generations gallery under the timeline, including after a restart. From there you can open a clip in the editor, reuse its prompt and settings, or delete it along with its files.
+Enter a prompt, choose text-to-video or current-image-to-video, and click Generate on my GPU. The first generation downloads the Lightricks/LTX-Video model into `.models/`; allow roughly 27 GB for the initial model weights and substantial download time. Subsequent generations reuse that cache. Inference is local. The server listens only on loopback, validates request origin, and runs one GPU job at a time. Jobs and generated MP4s are saved under `.jobs/`, one folder per job, and Cancel stops the worker. Every generation appears in the Generations gallery under the timeline, including after a restart. A finished generation is added to the timeline as a new shot. From the gallery you can put a clip in the selected shot, add it as another shot, reuse its prompt and settings, or delete it along with its files.
 
 The model stays loaded between generations, so only the first one after starting the app pays the loading cost. Re-running a prompt with a new seed also skips prompt encoding. The model is unloaded after 10 idle minutes to give memory back; set `ANIMATION_ENGINE_IDLE_MINUTES` to change that. `ANIMATION_ENGINE_PORT` runs the server on a port other than 5173. To run a single job outside the app, use `.venv/bin/python engine/generate.py .jobs/<id>/job.json`.
 
-The current checkout already has its isolated Python environment installed. It uses PyTorch's MPS backend on the M4 Mac. The text encoder runs on CPU and is released before GPU denoising to reduce memory pressure. Preview presets are intentionally small (256×448, 448×256, or 448×448; 9, 25, or 49 frames at 24 fps). Generation performance and quality depend on hardware and model; this is an initial application, not feature parity with Runway.
+The current checkout already has its isolated Python environment installed. It uses PyTorch's MPS backend on the M4 Mac. The whole model, text encoder included, runs on the GPU while loaded. Preview presets are intentionally small (256×448, 448×256, or 448×448; 9, 25, or 49 frames at 24 fps). Generation performance and quality depend on hardware and model; this is an initial application, not feature parity with Runway.
 
 ## Editor features
 
+- A timeline of shots played back to back: add, reorder and delete shots, each with its own artwork or generated clip, camera, atmosphere, length (2–15 seconds) and title.
 - Image import; six camera movements; embers, snow, rain and mist.
-- Portrait, landscape and square formats; 5–15 second animated image shots.
+- Portrait, landscape and square formats for the whole video.
 - Live preview, playback and scrubbing; titles and vignette.
 - MP4 export (H.264 where the browser supports it, otherwise VP9), rendered frame by frame with WebCodecs, so it's exact and usually faster than real time. It's silent and 30 fps. Browsers without WebCodecs fall back to real-time WebM recording.
-- Download and reopen self-contained JSON image projects.
+- Download and reopen JSON projects with every shot.
 - Generated MP4 playback in the editor and direct MP4 download.
-- A gallery of past generations that survives restarts, with open, reuse settings and delete.
+- A gallery of past generations that survives restarts, with use in a shot, add as a shot, reuse settings and delete.
 
-Image projects save their artwork and settings. Generated video projects do not yet support JSON saving; download their MP4 instead. Export loops a short generated clip for the selected edit duration. Chrome or Edge provides the broadest export support.
+Projects embed image artwork, but only link to generated clips, which stay in `.jobs/`; deleting a generation removes it from projects that use it. A generated clip shorter than its shot loops. Projects saved before the timeline open as a single shot. Chrome or Edge provides the broadest export support.
 
 ## Development
 
@@ -76,7 +77,7 @@ Code layout:
 - `server.mjs`: starts the local server on 127.0.0.1:5173.
 - `server/`: request routing and host/origin checks (`app.mjs`), the one-at-a-time GPU job runner (`jobs.mjs`), request validation (`validate.mjs`), and JSON and byte-range file helpers (`http.mjs`).
 - `engine/ltx_engine.py`: loads LTX-Video and renders a job. `engine/worker.py` keeps it loaded and takes jobs from the server (`server/worker.mjs`), and `engine/generate.py` runs one job from the command line.
-- `public/js/`: the editor. `main.js` holds state and wires the controls, `renderer.js` draws frames, `project.js` saves and opens projects, `ai.js` runs the generation panel, and `export.js` renders MP4 (with `public/vendor/mp4-muxer`) or records WebM.
+- `public/js/`: the editor. `main.js` holds state and wires the controls, `shots.js` does the timeline math, `renderer.js` draws frames, `project.js` saves and opens projects, `ai.js` runs the generation panel, and `export.js` renders MP4 (with `public/vendor/mp4-muxer`) or records WebM.
 - `desktop.cjs` and `scripts/build-mac.mjs`: the Mac app.
 
 Local text-to-video inference succeeded on the M4 GPU: the MP4 decoded correctly at 448×256, 24 fps, 9 frames. Longer clips and image-to-video inference remain unverified.

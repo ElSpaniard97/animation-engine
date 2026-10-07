@@ -66,7 +66,17 @@ function card(job) {
   const actions = [];
   if (job.status === 'complete') {
     actions.push(
-      el('button', { textContent: current ? 'Loaded' : 'Open', disabled: current, onclick: () => open(job) }),
+      el('button', {
+        textContent: current ? 'In shot' : 'Use',
+        title: 'Put this clip in the selected shot',
+        disabled: current,
+        onclick: () => open(job),
+      }),
+      el('button', {
+        textContent: '+ Shot',
+        title: 'Add this clip as a new shot after the selected one',
+        onclick: () => editor.addVideoShot(job.url),
+      }),
     );
   }
   actions.push(

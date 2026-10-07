@@ -64,7 +64,7 @@ async function poll(editor) {
     if (job.status === 'complete') {
       $('aiDownload').href = job.url;
       $('aiDownload').hidden = false;
-      await editor.loadVideo(job.url);
+      await editor.addVideoShot(job.url);
     }
     refreshGallery();
   } catch (error) {
