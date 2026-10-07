@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { access, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { WorkerProcess } from './worker.mjs';
 
 export class BusyError extends Error {}
 
@@ -29,16 +29,15 @@ function describe(config) {
 }
 
 /**
- * Runs one generation at a time. Each job gets its own folder under `jobsDir` and its own
- * Python worker process, so GPU memory is released when the job ends. Each folder keeps a
- * `status.json`, so finished jobs are listed again after a restart.
+ * Runs one generation at a time on a long-running GPU worker that keeps the model loaded (see
+ * worker.mjs). Each job gets its own folder under `jobsDir` with a `status.json`, so finished
+ * jobs are listed again after a restart.
  */
 export class JobRunner {
-  constructor({ jobsDir, python, script, env = {} }) {
+  constructor({ jobsDir, python, script, env = {}, idleMs }) {
     this.jobsDir = jobsDir;
     this.python = python;
-    this.script = script;
-    this.env = env;
+    this.worker = new WorkerProcess({ python, script, env, idleMs });
     this.jobs = new Map();
     this.active = null;
     this.preparing = false;
@@ -139,12 +138,7 @@ export class JobRunner {
     this.jobs.set(id, job);
     this.active = id;
     await this.#save(job);
-    const child = spawn(this.python, [this.script, configPath], {
-      cwd: process.cwd(),
-      env: { ...process.env, ...this.env },
-    });
-    job.child = child;
-    this.#watch(job, child, config.output_path);
+    this.#run(job, { id, ...config });
     return job;
   }
 
@@ -160,50 +154,27 @@ export class JobRunner {
     }
   }
 
-  #watch(job, child, outputPath) {
-    let buffer = '';
-    let errors = '';
-    // The worker prints one JSON progress object per line.
-    child.stdout.on('data', (chunk) => {
-      buffer += chunk;
-      const lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (const line of lines) {
-        try {
-          const progress = JSON.parse(line);
-          job.stage = progress.stage;
-          job.step = progress.step;
-          job.total = progress.total;
-        } catch {}
-      }
+  async #run(job, config) {
+    const outcome = await this.worker.run(config, (progress) => {
+      if (job.status !== 'running') return;
+      job.stage = progress.stage;
+      job.step = progress.step;
+      job.total = progress.total;
     });
-    child.stderr.on('data', (chunk) => {
-      errors = (errors + chunk.toString()).slice(-4000);
-    });
-    child.on('error', (error) => {
-      job.status = 'failed';
-      job.stage = error.message;
-      if (this.active === job.id) this.active = null;
-      this.#save(job);
-    });
-    child.on('close', async (code) => {
-      if (this.active === job.id) this.active = null;
-      if (job.status === 'cancelled') return;
-      if (code === 0) {
-        if (await exists(outputPath)) {
-          job.status = 'complete';
-          job.url = '/api/jobs/' + job.id + '/video';
-          job.stage = 'Complete';
-        } else {
-          job.status = 'failed';
-          job.stage = 'Worker produced no video';
-        }
-      } else {
-        job.status = 'failed';
-        if (!job.stage.startsWith('Failed:')) job.stage = errors.slice(-1000) || 'Generation failed';
-      }
-      await this.#save(job);
-    });
+    if (this.active === job.id) this.active = null;
+    if (outcome.timings) job.timings = outcome.timings;
+    if (job.status === 'cancelled') return;
+    if (outcome.result === 'complete' && (await exists(config.output_path))) {
+      job.status = 'complete';
+      job.url = '/api/jobs/' + job.id + '/video';
+      job.stage = 'Complete';
+    } else {
+      job.status = outcome.result === 'cancelled' ? 'cancelled' : 'failed';
+      job.stage = outcome.result === 'complete' ? 'Worker produced no video' : outcome.stage;
+    }
+    job.step = null;
+    job.total = null;
+    await this.#save(job);
   }
 
   get(id) {
@@ -215,10 +186,9 @@ export class JobRunner {
     return [...this.jobs.values()].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  /** Returns the job without its process handle, for sending to the browser. */
+  /** The job as sent to the browser. */
   toPublic(job) {
-    const { child, ...publicJob } = job;
-    return publicJob;
+    return { ...job };
   }
 
   videoPath(job) {
@@ -229,7 +199,7 @@ export class JobRunner {
     if (job.status === 'running') {
       job.status = 'cancelled';
       job.stage = 'Cancelled';
-      job.child.kill('SIGTERM');
+      this.worker.cancel(job.id);
       this.#save(job);
     }
   }
@@ -242,7 +212,8 @@ export class JobRunner {
     return true;
   }
 
+  /** Stops the GPU worker, which also ends any running job. */
   killAll() {
-    for (const job of this.jobs.values()) if (job.status === 'running') job.child.kill();
+    this.worker.stop();
   }
 }

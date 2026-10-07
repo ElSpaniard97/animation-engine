@@ -128,15 +128,29 @@ test('saves an uploaded image next to the job', async () => {
   assert.equal((await readFile(config.image_path)).toString(), 'fake png');
 });
 
-test('reports worker failures', async () => {
-  const crash = await call('POST', '/api/generate', { headers: fromApp(), body: job('fail') });
-  assert.equal((await waitFor(crash.json.id)).stage.trim(), 'CUDA exploded');
-  const reported = await call('POST', '/api/generate', { headers: fromApp(), body: job('report failure') });
+test('reports worker failures and recovers from a crashed worker', async () => {
+  const crash = await call('POST', '/api/generate', { headers: fromApp(), body: job('crash') });
+  const crashed = await waitFor(crash.json.id);
+  assert.equal(crashed.status, 'failed');
+  assert.equal(crashed.stage, 'Segmentation fault in Metal');
+  const reported = await call('POST', '/api/generate', { headers: fromApp(), body: job('fail') });
   assert.equal((await waitFor(reported.json.id)).stage, 'Failed: out of memory');
   const empty = await call('POST', '/api/generate', { headers: fromApp(), body: job('no output') });
   const result = await waitFor(empty.json.id);
   assert.equal(result.stage, 'Worker produced no video');
   assert.equal((await call('GET', result.id && `/api/jobs/${result.id}/video`)).status, 409);
+  const next = await call('POST', '/api/generate', { headers: fromApp(), body: job('After the crash') });
+  assert.equal((await waitFor(next.json.id)).status, 'complete');
+});
+
+test('keeps one worker loaded across jobs', async () => {
+  const pids = [];
+  for (const prompt of ['One', 'Two']) {
+    const start = await call('POST', '/api/generate', { headers: fromApp(), body: job(prompt) });
+    pids.push((await waitFor(start.json.id, 'complete')).timings.pid);
+  }
+  assert.equal(pids[0], pids[1]);
+  assert.equal(runner.worker.pid, pids[0]);
 });
 
 test('runs one job at a time and cancels', async () => {
@@ -200,7 +214,11 @@ test('a restarted server lists the same jobs', async () => {
   const before = (await call('GET', '/api/jobs')).json.jobs;
   // Wait for the cancelled job's status to reach disk.
   await new Promise((done) => setTimeout(done, 50));
-  const restarted = new JobRunner({ jobsDir, python: process.execPath, script: runner.script });
+  const restarted = new JobRunner({
+    jobsDir,
+    python: process.execPath,
+    script: resolve('test/fixtures/fake-worker.mjs'),
+  });
   await restarted.load();
   const after = restarted.list().map((j) => restarted.toPublic(j));
   assert.deepEqual(
