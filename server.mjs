@@ -12,8 +12,10 @@ await mkdir(jobsDir, { recursive: true });
 const runner = new JobRunner({
   jobsDir,
   python: resolve('.venv/bin/python'),
-  script: resolve('engine/generate.py'),
+  script: resolve('engine/worker.py'),
   env: { HF_HOME: resolve('.models'), PYTORCH_ENABLE_MPS_FALLBACK: '1' },
+  // The model stays loaded between generations and is unloaded after this long without one.
+  idleMs: (Number(process.env.ANIMATION_ENGINE_IDLE_MINUTES) || 10) * 60 * 1000,
 });
 await runner.load();
 const server = createAppServer({ port: PORT, publicDir: resolve('public'), runner });

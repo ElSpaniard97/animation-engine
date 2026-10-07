@@ -43,6 +43,8 @@ npm run dev
 
 Enter a prompt, choose text-to-video or current-image-to-video, and click Generate on my GPU. The first generation downloads the Lightricks/LTX-Video model into `.models/`; allow roughly 27 GB for the initial model weights and substantial download time. Subsequent generations reuse that cache. Inference is local. The server listens only on loopback, validates request origin, and runs one GPU job at a time. Jobs and generated MP4s are saved under `.jobs/`, one folder per job, and Cancel stops the worker. Every generation appears in the Generations gallery under the timeline, including after a restart. From there you can open a clip in the editor, reuse its prompt and settings, or delete it along with its files.
 
+The model stays loaded between generations, so only the first one after starting the app pays the loading cost. Re-running a prompt with a new seed also skips prompt encoding. The model is unloaded after 10 idle minutes to give memory back; set `ANIMATION_ENGINE_IDLE_MINUTES` to change that. To run a single job outside the app, use `.venv/bin/python engine/generate.py .jobs/<id>/job.json`.
+
 The current checkout already has its isolated Python environment installed. It uses PyTorch's MPS backend on the M4 Mac. The text encoder runs on CPU and is released before GPU denoising to reduce memory pressure. Preview presets are intentionally small (256×448, 448×256, or 448×448; 9, 25, or 49 frames at 24 fps). Generation performance and quality depend on hardware and model; this is an initial application, not feature parity with Runway.
 
 ## Editor features
@@ -64,7 +66,7 @@ npm ci              # once: installs Electron, the packager and Prettier
 npm test            # unit tests and server tests with a stand-in GPU worker
 npm run check       # syntax check
 npm run format      # Prettier
-.venv/bin/python -m py_compile engine/generate.py
+.venv/bin/python -m py_compile engine/*.py
 ```
 
 The tests need no GPU or Python: `test/fixtures/fake-worker.mjs` speaks the same progress protocol as `engine/generate.py`.
@@ -73,7 +75,7 @@ Code layout:
 
 - `server.mjs`: starts the local server on 127.0.0.1:5173.
 - `server/`: request routing and host/origin checks (`app.mjs`), the one-at-a-time GPU job runner (`jobs.mjs`), request validation (`validate.mjs`), and JSON and byte-range file helpers (`http.mjs`).
-- `engine/generate.py`: the LTX-Video worker, run once per job.
+- `engine/ltx_engine.py`: loads LTX-Video and renders a job. `engine/worker.py` keeps it loaded and takes jobs from the server (`server/worker.mjs`), and `engine/generate.py` runs one job from the command line.
 - `public/js/`: the editor. `main.js` holds state and wires the controls, `renderer.js` draws frames, `project.js` saves and opens projects, `ai.js` runs the generation panel, and `export.js` records WebM.
 - `desktop.cjs` and `scripts/build-mac.mjs`: the Mac app.
 
