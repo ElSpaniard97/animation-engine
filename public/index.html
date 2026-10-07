@@ -157,6 +157,20 @@ blurry, distorted, low quality</textarea>
           >
           <label>On-screen title<input id="title" placeholder="Optional title" maxlength="120" /></label>
         </div>
+        <div class="section">
+          <div class="eyebrow">04 / MUSIC</div>
+          <label class="button wide" id="musicPick"
+            >Add music<input id="musicFile" type="file" accept="audio/*" hidden
+          /></label>
+          <div id="musicControls" hidden>
+            <p class="music-name"><span>♪</span> <span id="musicName"></span></p>
+            <label
+              >Volume <output id="musicVolumeValue">80%</output
+              ><input id="musicVolume" type="range" min="0" max="100" value="80" /></label
+            ><button id="musicRemove" class="wide">Remove music</button>
+          </div>
+          <small class="note">Plays from the first shot and fades out at the end of the video.</small>
+        </div>
         <p class="note">
           Camera, atmosphere, duration and title apply to the selected shot. Format applies to the whole
           video.
@@ -189,6 +203,7 @@ blurry, distorted, low quality</textarea>
             </div>
           </div>
           <div class="clips" id="clips"></div>
+          <div class="music-track" id="musicTrack" hidden>♪ <span id="musicTrackName"></span></div>
         </section>
         <section class="timeline gallery" id="gallery" aria-labelledby="galleryTitle" hidden>
           <div class="track-label">

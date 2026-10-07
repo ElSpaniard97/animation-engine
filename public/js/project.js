@@ -1,5 +1,6 @@
 // Saved projects: a JSON file holding the output format and a sequence of shots. Each shot keeps
 // its settings plus either its artwork as a data URL or a link to a local generation.
+import { MUSIC_DATA_URL } from './audio.js';
 import { MAX_SHOTS } from './shots.js';
 
 export const PROJECT_VERSION = 2;
@@ -68,7 +69,8 @@ function parseShot(shot, schema, number) {
 }
 
 /**
- * Returns {name, ratio, shots: [{name, settings, artwork | video}]} for a valid project, or throws.
+ * Returns {name, ratio, shots: [{name, settings, artwork | video}], music?} for a valid project, or
+ * throws.
  * `schema` covers the form's settings: `ratio` applies to the whole project, the rest to each shot.
  * Version 1 files (a single image shot) open as a one-shot sequence.
  */
@@ -87,14 +89,24 @@ export function parseProject(text, schema) {
   if (!Array.isArray(project.shots) || !project.shots.length || project.shots.length > MAX_SHOTS) {
     throw Error('Missing shots');
   }
-  return {
+  const parsed = {
     name: cleanName(project.name, 'Untitled project'),
     ratio: project.ratio,
     shots: project.shots.map((shot, i) => parseShot(shot, shotSchema, i + 1)),
   };
+  if (project.music != null) parsed.music = parseMusic(project.music);
+  return parsed;
 }
 
-/** `shots`: [{name, settings, artwork | video}]. */
-export function serializeProject({ name, ratio, shots }) {
-  return JSON.stringify({ version: PROJECT_VERSION, name, ratio, shots });
+function parseMusic(music) {
+  if (!music || typeof music.audio !== 'string' || !MUSIC_DATA_URL.test(music.audio)) {
+    throw Error('Invalid music');
+  }
+  if (!validSetting(music.volume, { type: 'number', min: 0, max: 100 })) throw Error('Invalid music volume');
+  return { name: cleanName(music.name, 'Music'), audio: music.audio, volume: +music.volume };
+}
+
+/** `shots`: [{name, settings, artwork | video}]; `music` (optional): {name, audio, volume 0–100}. */
+export function serializeProject({ name, ratio, shots, music }) {
+  return JSON.stringify({ version: PROJECT_VERSION, name, ratio, shots, ...(music && { music }) });
 }

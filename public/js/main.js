@@ -1,4 +1,5 @@
 import { initAi } from './ai.js';
+import { loadMusic, syncMusic } from './audio.js';
 import { $ } from './dom.js';
 import { describeExportFormat, exportVideo } from './export.js';
 import { blobToDataUrl, download } from './files.js';
@@ -23,6 +24,8 @@ const editor = {
   canvas,
   shots: [],
   selected: 0,
+  /** The music track ({name, source, element, volume}) or null. */
+  music: null,
   playing: false,
   exporting: false,
   recording: null,
@@ -188,6 +191,7 @@ function draw() {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
   }
+  syncMusic(editor.music, editor.t, { playing: editor.playing, duration: total });
   $('scrub').value = (editor.t / total) * 1000;
   $('time').textContent = formatTime(editor.t);
   const shot = editor.shots[frame.index];
@@ -364,7 +368,12 @@ async function saveProject() {
     }
     shots.push(saved);
   }
-  const json = serializeProject({ name: editor.shots[0].name, ratio: $('ratio').value, shots });
+  const music = editor.music && {
+    name: editor.music.name,
+    audio: editor.music.source,
+    volume: Math.round(editor.music.volume * 100),
+  };
+  const json = serializeProject({ name: editor.shots[0].name, ratio: $('ratio').value, shots, music });
   download(new Blob([json], { type: 'application/json' }), 'animation-engine-project.json');
   const clips = shots.some((shot) => shot.video)
     ? ' Generated clips are linked, so keep them in your Generations.'
@@ -393,6 +402,15 @@ async function openProject(file) {
   $('ratio').value = project.ratio;
   select(0);
   refreshGallery();
+  try {
+    await setMusic(
+      project.music && (await loadMusic(project.music.audio, project.music.name, project.music.volume / 100)),
+    );
+  } catch {
+    await setMusic(null);
+    message('Project opened, but its music could not be played in this browser.');
+    return;
+  }
   const missing = await Promise.all(
     editor.shots
       .filter((shot) => shot.kind === 'video')
@@ -411,6 +429,37 @@ async function openProject(file) {
       ? `Project opened, but ${count} generated clip${count > 1 ? 's are' : ' is'} missing from Generations.`
       : `Project opened with ${editor.shots.length} shot${editor.shots.length > 1 ? 's' : ''}.`,
   );
+}
+
+/** Replaces the music track (or removes it with null) and updates its controls. */
+async function setMusic(music) {
+  editor.music?.element.pause();
+  editor.music = music;
+  $('musicPick').hidden = Boolean(music);
+  $('musicControls').hidden = !music;
+  $('musicTrack').hidden = !music;
+  if (music) {
+    $('musicName').textContent = music.name;
+    $('musicTrackName').textContent = `${music.name} · ${formatTime(music.element.duration)}`;
+    $('musicVolume').value = Math.round(music.volume * 100);
+    $('musicVolumeValue').textContent = $('musicVolume').value + '%';
+  }
+  draw();
+}
+
+function uploadMusic(file) {
+  if (!file.type.startsWith('audio/')) return message('Choose an audio file.');
+  if (file.size > 30 * 1024 * 1024) return message('Choose an audio file smaller than 30 MB.');
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      await setMusic(await loadMusic(reader.result, file.name.replace(/\.[^.]+$/, '')));
+      message('Music added. It plays from the first shot and fades out at the end.');
+    } catch (error) {
+      message(error.message + '. Try an MP3, M4A or WAV file.');
+    }
+  };
+  reader.readAsDataURL(file);
 }
 
 function uploadArtwork(file) {
@@ -540,6 +589,20 @@ $('upload').onchange = (e) => {
   e.target.value = '';
 };
 $('save').onclick = saveProject;
+$('musicFile').onchange = (e) => {
+  const file = e.target.files[0];
+  if (file) uploadMusic(file);
+  e.target.value = '';
+};
+$('musicVolume').oninput = () => {
+  editor.music.volume = $('musicVolume').value / 100;
+  $('musicVolumeValue').textContent = $('musicVolume').value + '%';
+  draw();
+};
+$('musicRemove').onclick = () => {
+  setMusic(null);
+  message('Music removed.');
+};
 $('open').onchange = (e) => {
   const file = e.target.files[0];
   if (file) openProject(file);

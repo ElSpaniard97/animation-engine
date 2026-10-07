@@ -82,6 +82,22 @@ test('fills in settings that older projects did not have', () => {
   assert.throws(() => parseProject(bad, withTransition));
 });
 
+test('keeps an optional music track', () => {
+  const music = { name: 'Theme', audio: 'data:audio/mpeg;base64,AAAA', volume: 65 };
+  const project = { name: 'Knight', ratio: '16:9', shots: [shot], music };
+  assert.deepEqual(parseProject(serializeProject(project), ratioSchema).music, music);
+  assert.equal(parseProject(serializeProject({ ...project, music: null }), ratioSchema).music, undefined);
+  for (const bad of [
+    { ...music, audio: 'https://example.com/theme.mp3' },
+    { ...music, audio: 'data:text/html;base64,AAAA' },
+    { ...music, volume: 101 },
+    { ...music, volume: 'loud' },
+    'theme.mp3',
+  ]) {
+    assert.throws(() => parseProject(serializeProject({ ...project, music: bad }), ratioSchema));
+  }
+});
+
 test('rejects invalid projects', () => {
   const v2 = (shots, extra = {}) => JSON.stringify({ version: 2, ratio: '16:9', shots, ...extra });
   const cases = [
