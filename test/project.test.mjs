@@ -23,38 +23,75 @@ test('reads the rules from form controls', () => {
   });
 });
 
-test('round-trips a saved project', () => {
-  const text = serializeProject({ name: 'Knight', artwork, settings });
-  assert.deepEqual(parseProject(text, schema), { name: 'Knight', artwork, settings });
+const shot = { name: 'Knight', artwork, settings: { ...settings } };
+const clip = {
+  name: 'Clip',
+  video: '/api/jobs/' + '0'.repeat(8) + '-0000-0000-0000-' + '0'.repeat(12) + '/video',
+  settings,
+};
+const ratioSchema = { ...schema, ratio: { type: 'option', values: ['16:9', '9:16'] } };
+
+test('round-trips a sequence of image and generated shots', () => {
+  const project = { name: 'Knight', ratio: '16:9', shots: [shot, clip] };
+  assert.deepEqual(parseProject(serializeProject(project), ratioSchema), project);
+});
+
+test('opens a version 1 project as a single shot', () => {
+  const text = JSON.stringify({
+    version: 1,
+    name: 'Knight',
+    artwork,
+    settings: { ...settings, ratio: '9:16' },
+  });
+  assert.deepEqual(parseProject(text, ratioSchema), { name: 'Knight', ratio: '9:16', shots: [shot] });
 });
 
 test('accepts numbers where the form saved strings', () => {
   const text = serializeProject({
-    name: 'Knight',
-    artwork,
-    settings: { ...settings, strength: 30, duration: 5 },
+    ratio: '16:9',
+    shots: [{ ...shot, settings: { ...settings, strength: 30 } }],
   });
-  assert.equal(parseProject(text, schema).settings.strength, 30);
+  assert.equal(parseProject(text, ratioSchema).shots[0].settings.strength, 30);
 });
 
-test('defaults and trims the name', () => {
-  const unnamed = JSON.stringify({ version: 1, artwork, settings });
-  assert.equal(parseProject(unnamed, schema).name, 'Untitled shot');
-  const long = serializeProject({ name: 'x'.repeat(300), artwork, settings });
-  assert.equal(parseProject(long, schema).name.length, 150);
+test('defaults and trims names', () => {
+  const text = serializeProject({
+    ratio: '16:9',
+    shots: [
+      { artwork, settings },
+      { name: 'x'.repeat(300), artwork, settings },
+    ],
+  });
+  const project = parseProject(text, ratioSchema);
+  assert.equal(project.name, 'Untitled project');
+  assert.equal(project.shots[0].name, 'Shot 1');
+  assert.equal(project.shots[1].name.length, 150);
 });
 
 test('rejects invalid projects', () => {
+  const v2 = (shots, extra = {}) => JSON.stringify({ version: 2, ratio: '16:9', shots, ...extra });
   const cases = [
     'not json',
-    JSON.stringify({ version: 2, artwork, settings }),
-    JSON.stringify({ version: 1, artwork: 'https://example.com/a.png', settings }),
+    JSON.stringify({ version: 3, ratio: '16:9', shots: [shot] }),
+    JSON.stringify({
+      version: 1,
+      artwork: 'https://example.com/a.png',
+      settings: { ...settings, ratio: '16:9' },
+    }),
     JSON.stringify({ version: 1, artwork }),
-    JSON.stringify({ version: 1, artwork, settings: { ...settings, motion: 'spin' } }),
-    JSON.stringify({ version: 1, artwork, settings: { ...settings, strength: '31' } }),
-    JSON.stringify({ version: 1, artwork, settings: { ...settings, strength: 'lots' } }),
-    JSON.stringify({ version: 1, artwork, settings: { ...settings, vignette: 'yes' } }),
-    JSON.stringify({ version: 1, artwork, settings: { ...settings, title: 'x'.repeat(121) } }),
+    v2([]),
+    v2('nope'),
+    v2([shot], { ratio: '4:3' }),
+    v2(Array(51).fill(shot)),
+    v2([{ ...shot, artwork: 'https://example.com/a.png' }]),
+    v2([{ ...clip, video: 'https://example.com/clip.mp4' }]),
+    v2([{ ...clip, video: '/api/jobs/../../secret/video' }]),
+    v2([{ name: 'No settings', artwork }]),
+    v2([{ ...shot, settings: { ...settings, motion: 'spin' } }]),
+    v2([{ ...shot, settings: { ...settings, strength: '31' } }]),
+    v2([{ ...shot, settings: { ...settings, strength: 'lots' } }]),
+    v2([{ ...shot, settings: { ...settings, vignette: 'yes' } }]),
+    v2([{ ...shot, settings: { ...settings, title: 'x'.repeat(121) } }]),
   ];
-  for (const text of cases) assert.throws(() => parseProject(text, schema), undefined, text);
+  for (const text of cases) assert.throws(() => parseProject(text, ratioSchema), undefined, text);
 });

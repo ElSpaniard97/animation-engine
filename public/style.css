@@ -248,40 +248,83 @@ canvas {
   color: #8d99ac;
   display: flex;
   justify-content: space-between;
+  align-items: center;
 }
 .track-label span {
   letter-spacing: 0;
 }
-.clip {
+.track-actions {
   display: flex;
-  gap: 14px;
-  align-items: center;
+  gap: 6px;
+}
+.track-actions button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+.clips {
+  display: flex;
+  gap: 8px;
   margin-top: 14px;
-  border: 1px solid #9c7c50;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.clip {
+  position: relative;
+  overflow: hidden;
+  flex: 1 1 0;
+  min-width: 150px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  border: 1px solid #3a4250;
   border-radius: 7px;
-  padding: 10px;
+  padding: 8px;
+  background: #1d232d;
+}
+.clip.selected {
+  border-color: #9c7c50;
   background: linear-gradient(90deg, #302b26, #25282f);
 }
-.clip img {
-  width: 46px;
-  height: 55px;
+.clip img,
+.clip video {
+  flex: none;
+  width: 40px;
+  height: 48px;
   object-fit: cover;
   border-radius: 4px;
+  background: #0a0b0f;
+}
+.clip div {
+  min-width: 0;
 }
 .clip strong {
-  font-size: 14px;
+  display: block;
+  font-size: 13px;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .clip small {
   display: block;
-  font-size: 12px;
+  font-size: 11px;
   color: #b4ada4;
-  margin-top: 5px;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .clip > span {
   margin-left: auto;
-  font-size: 14px;
+  font-size: 13px;
   color: #e4b878;
+}
+.clip-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  width: 0;
+  background: #e4b878;
 }
 .gallery {
   margin-top: 16px;
@@ -347,6 +390,7 @@ canvas {
 }
 .gen-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: auto;
 }

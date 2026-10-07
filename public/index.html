@@ -94,7 +94,7 @@
           ><label class="check"><input id="vignette" type="checkbox" checked /> Cinematic vignette</label>
         </div>
         <div class="section">
-          <div class="eyebrow">03 / OUTPUT</div>
+          <div class="eyebrow">03 / SHOT &amp; OUTPUT</div>
           <div class="pair">
             <label
               >Format<select id="ratio">
@@ -104,6 +104,8 @@
               </select></label
             ><label
               >Duration<select id="duration">
+                <option value="2">2 seconds</option>
+                <option value="3">3 seconds</option>
                 <option value="5">5 seconds</option>
                 <option value="10" selected>10 seconds</option>
                 <option value="15">15 seconds</option>
@@ -113,36 +115,38 @@
           <label>On-screen title<input id="title" placeholder="Optional title" maxlength="120" /></label>
         </div>
         <p class="note">
-          Camera and effects animate your image. Use Local AI Generation to create new footage.
+          Camera, atmosphere, duration and title apply to the selected shot. Format applies to the whole
+          video.
         </p>
       </aside>
       <section class="stage">
         <div class="stage-top">
           <div>
-            <span class="eyebrow">SHOT 01</span>
+            <span class="eyebrow" id="shotNumber">SHOT 01</span>
             <h2 id="filename">The returning knight</h2>
           </div>
           <span class="pill" id="resolution">720 × 1280</span>
         </div>
         <div class="viewer"><canvas id="canvas" aria-label="Animated artwork preview"></canvas></div>
         <div class="transport">
-          <button id="play" aria-label="Play animation">▶</button><span id="time">00:00</span
+          <button id="play" aria-label="Play animation">▶</button><span id="time">0:00</span
           ><input id="scrub" aria-label="Animation position" type="range" min="0" max="1000" value="0" /><span
             id="length"
-            >00:10</span
+            >0:10</span
           ><button id="restart" aria-label="Restart animation">↺</button>
         </div>
-        <div class="timeline">
-          <div class="track-label">VISUAL TRACK <span>1 shot</span></div>
-          <div class="clip">
-            <img id="thumb" src="assets/knight.png" alt="Current artwork" />
-            <div>
-              <strong id="clipName">The returning knight</strong
-              ><small id="clipDetails">Slow push in · Floating embers</small>
+        <section class="timeline" aria-labelledby="trackTitle">
+          <div class="track-label">
+            <span id="trackTitle">VISUAL TRACK <span id="shotCount">1 shot</span></span>
+            <div class="track-actions">
+              <button id="moveLeft" aria-label="Move shot earlier" title="Move shot earlier">◀</button
+              ><button id="moveRight" aria-label="Move shot later" title="Move shot later">▶</button
+              ><button id="removeShot" title="Delete the selected shot">Delete</button
+              ><button id="addShot" title="Add a copy of the selected shot after it">+ Add shot</button>
             </div>
-            <span id="clipLength">10s</span>
           </div>
-        </div>
+          <div class="clips" id="clips"></div>
+        </section>
         <section class="timeline gallery" id="gallery" aria-labelledby="galleryTitle" hidden>
           <div class="track-label">
             <span id="galleryTitle">GENERATIONS</span> <span id="galleryCount"></span>
