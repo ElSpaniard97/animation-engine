@@ -53,8 +53,38 @@
                 <option value="25">1 second</option>
                 <option value="49" selected>2 seconds</option>
               </select></label
-            ><label>Seed<input id="aiSeed" type="number" min="0" max="2147483647" value="42" /></label>
+            ><label
+              >Quality<select id="aiQuality">
+                <option value="draft">Draft (fast)</option>
+                <option value="standard" selected>Standard</option>
+                <option value="high">High (slow)</option>
+              </select></label
+            >
           </div>
+          <label
+            >Seed
+            <span class="seed"
+              ><input id="aiSeed" type="number" min="0" max="2147483647" value="42" /><button
+                id="randomSeed"
+                type="button"
+                aria-label="Random seed"
+                title="Pick a random seed"
+              >
+                ⚄
+              </button></span
+            ></label
+          >
+          <details class="advanced">
+            <summary>Advanced</summary>
+            <label
+              >Prompt strength <output id="aiGuidanceValue">3</output
+              ><input id="aiGuidance" type="range" min="1" max="10" step="0.5" value="3" /></label
+            ><small class="note">Higher follows the prompt more closely but can look harsh.</small
+            ><label
+              >Avoid<textarea id="aiNegative" rows="2" maxlength="500">
+blurry, distorted, low quality</textarea>
+            </label>
+          </details>
           <button id="generate" class="primary wide">Generate on my GPU</button
           ><button id="cancel" class="wide" hidden>Cancel generation</button>
           <p id="aiStatus" role="status" class="note">

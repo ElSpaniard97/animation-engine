@@ -25,6 +25,10 @@ function describe(config) {
     frames: config.frames,
     ratio: config.ratio || '16:9',
     mode: config.image_path ? 'image' : 'text',
+    // Jobs from before advanced settings existed used these defaults.
+    quality: config.quality || 'standard',
+    guidance: config.guidance ?? 3,
+    negative_prompt: config.negative_prompt ?? 'blurry, distorted, low quality',
   };
 }
 

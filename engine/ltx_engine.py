@@ -67,22 +67,23 @@ class Engine:
         elif self.device == 'cuda':
             self.torch.cuda.synchronize()
 
-    def encode(self, prompt):
+    def encode(self, prompt, negative_prompt):
         """Prompt embeddings, kept on the CPU in a small cache so seed variations skip encoding."""
-        if prompt in self.embeddings:
-            self.embeddings.move_to_end(prompt)
-            return self.embeddings[prompt]
+        key = (prompt, negative_prompt)
+        if key in self.embeddings:
+            self.embeddings.move_to_end(key)
+            return self.embeddings[key]
         self.progress('Encoding prompt')
         with self.torch.inference_mode():
             embeddings = self.text_to_video.encode_prompt(
                 prompt=prompt,
-                negative_prompt=NEGATIVE_PROMPT,
+                negative_prompt=negative_prompt,
                 do_classifier_free_guidance=True,
                 device=self.torch.device(self.device),
                 max_sequence_length=128,
             )
         embeddings = tuple(tensor.cpu() for tensor in embeddings)
-        self.embeddings[prompt] = embeddings
+        self.embeddings[key] = embeddings
         if len(self.embeddings) > PROMPT_CACHE_SIZE:
             self.embeddings.popitem(last=False)
         return embeddings
@@ -95,7 +96,9 @@ class Engine:
         self.load()
         timings = {}
         started = time.monotonic()
-        prompt_embeds, prompt_mask, negative_embeds, negative_mask = self.encode(job['prompt'])
+        prompt_embeds, prompt_mask, negative_embeds, negative_mask = self.encode(
+            job['prompt'], job.get('negative_prompt', NEGATIVE_PROMPT)
+        )
         timings['encode'] = time.monotonic() - started
 
         def callback(pipeline, step, timestep, kwargs):
@@ -116,7 +119,7 @@ class Engine:
             num_frames=job['frames'],
             frame_rate=FPS,
             num_inference_steps=job['steps'],
-            guidance_scale=3.0,
+            guidance_scale=job.get('guidance', 3.0),
             generator=self.torch.Generator(device='cpu').manual_seed(job['seed']),
             callback_on_step_end=callback,
         )

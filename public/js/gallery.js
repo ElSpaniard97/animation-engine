@@ -1,6 +1,7 @@
 import { $ } from './dom.js';
 
 const LENGTHS = { 9: '0.4s', 25: '1s', 49: '2s' };
+const QUALITIES = { draft: 'draft', high: 'high quality' };
 let editor;
 
 function el(tag, props = {}, children = []) {
@@ -11,6 +12,7 @@ function el(tag, props = {}, children = []) {
 
 function describe(job) {
   const parts = [`Seed ${job.seed}`, LENGTHS[job.frames] || `${job.frames} frames`, job.ratio];
+  if (QUALITIES[job.quality]) parts.push(QUALITIES[job.quality]);
   if (job.mode === 'image') parts.push('from image');
   return parts.join(' · ');
 }
@@ -35,10 +37,14 @@ function reuse(job) {
   $('aiSeed').value = job.seed;
   $('aiFrames').value = String(job.frames);
   $('aiMode').value = job.mode;
+  $('aiQuality').value = job.quality;
+  $('aiGuidance').value = job.guidance;
+  $('aiGuidance').dispatchEvent(new Event('input'));
+  $('aiNegative').value = job.negative_prompt;
   $('ratio').value = job.ratio;
   $('ratio').dispatchEvent(new Event('input'));
   $('prompt').focus();
-  editor.message('Settings copied from the generation. Change the seed for a new variation.');
+  editor.message('Settings copied from the generation. Pick a new seed for a variation.');
 }
 
 async function open(job) {
