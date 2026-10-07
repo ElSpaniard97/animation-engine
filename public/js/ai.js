@@ -11,6 +11,7 @@ const FORM_IDS = [
   'aiSeed',
   'randomSeed',
   'aiQuality',
+  'aiResolution',
   'aiGuidance',
   'aiNegative',
 ];
@@ -93,6 +94,7 @@ async function generate(editor) {
       ratio: $('ratio').value,
       frames: +$('aiFrames').value,
       seed: +$('aiSeed').value,
+      resolution: $('aiResolution').value,
       quality: $('aiQuality').value,
       guidance: +$('aiGuidance').value,
       negative_prompt: $('aiNegative').value,
