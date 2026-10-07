@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { readJsonBody, sendFile, sendJson } from './http.mjs';
-import { BusyError } from './jobs.mjs';
+import { QueueFullError } from './jobs.mjs';
 import { validate } from './validate.mjs';
 
 const TYPES = {
@@ -63,22 +63,20 @@ export function createAppServer({ port, publicDir, runner }) {
   }
 
   async function generate(req, res) {
+    let data;
     try {
-      return await runner.reserve(async () => {
-        let data;
-        try {
-          data = validate(await readJsonBody(req));
-        } catch (error) {
-          return sendJson(res, 400, { error: error.message });
-        }
-        if (!(await runner.isInstalled())) {
-          return sendJson(res, 503, { error: 'Install the local runtime first. See README.' });
-        }
-        const job = await runner.start(data);
-        return sendJson(res, 202, { id: job.id, status: 'running' });
-      });
+      data = validate(await readJsonBody(req));
     } catch (error) {
-      if (error instanceof BusyError) return sendJson(res, 409, { error: error.message });
+      return sendJson(res, 400, { error: error.message });
+    }
+    if (!(await runner.isInstalled())) {
+      return sendJson(res, 503, { error: 'Install the local runtime first. See README.' });
+    }
+    try {
+      const job = await runner.start(data);
+      return sendJson(res, 202, runner.toPublic(job));
+    } catch (error) {
+      if (error instanceof QueueFullError) return sendJson(res, 409, { error: error.message });
       throw error;
     }
   }
