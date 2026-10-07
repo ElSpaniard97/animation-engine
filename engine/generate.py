@@ -13,7 +13,7 @@ try:
     import torch
     from diffusers import LTXPipeline, LTXImageToVideoPipeline
     from diffusers.utils import export_to_video
-    from PIL import Image
+    from PIL import Image, ImageOps
     device = 'mps' if torch.backends.mps.is_available() else ('cuda' if torch.cuda.is_available() else None)
     if not device:
         raise RuntimeError('No supported GPU found. Apple Metal or NVIDIA CUDA is required.')
@@ -40,7 +40,8 @@ try:
         guidance_scale=3.0, generator=torch.Generator(device='cpu').manual_seed(job['seed']),
         callback_on_step_end=callback)
     if job.get('image_path'):
-        args['image'] = Image.open(job['image_path']).convert('RGB').resize((job['width'], job['height']))
+        # Crop to the target aspect like the editor preview instead of stretching.
+        args['image'] = ImageOps.fit(Image.open(job['image_path']).convert('RGB'), (job['width'], job['height']), Image.LANCZOS)
     frames = pipe(**args).frames[0]
     progress('Encoding MP4')
     export_to_video(frames, job['output_path'], fps=24)
