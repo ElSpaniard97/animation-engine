@@ -1,6 +1,7 @@
 """LTX-Video on the local GPU, loaded once and reused across generations."""
 import gc
 import os
+from dataclasses import replace
 import time
 from collections import OrderedDict
 from pathlib import Path
@@ -169,11 +170,7 @@ class Engine:
             # Crop to the target aspect like the editor preview instead of stretching.
             size = (args['width'], args['height'])
             images = [ImageOps.fit(Image.open(path).convert('RGB'), size, Image.LANCZOS) for path in paths]
-            if len(images) == 1:
-                args['image'] = images[0]
-            else:
-                args['image'] = images
-                args['frame_index'] = keyframe_indices(len(images), job['frames'])
+            args.update(image_args(images, job['frames']))
         started = time.monotonic()
         try:
             if detail:
@@ -210,10 +207,29 @@ class Engine:
         refine = dict(args, width=size[0], height=size[1], latents=latents)
         refine.update(timesteps=REFINE_TIMESTEPS, denoise_strength=REFINE_STRENGTH)
         if 'image' in args:
-            images = args['image'] if isinstance(args['image'], list) else [args['image']]
-            images = [image.resize(size, Image.LANCZOS) for image in images]
-            refine['image'] = images if isinstance(args['image'], list) else images[0]
+            refine['image'] = args['image'].resize(size, Image.LANCZOS)
+        if 'conditions' in args:
+            refine['conditions'] = [
+                replace(condition, image=condition.image.resize(size, Image.LANCZOS))
+                for condition in args['conditions']
+            ]
         return pipe(**refine).frames[0]
+
+
+def image_args(images, frames):
+    """Pipeline arguments for a starting image and any keyframe images after it."""
+    if len(images) == 1:
+        return {'image': images[0]}
+    from diffusers.pipelines.ltx.pipeline_ltx_condition import LTXVideoCondition
+
+    # Not image=[...] with frame_index=[...]: without a video, LTXConditionPipeline zips the
+    # images against video=[None] and silently keeps only the first one.
+    indices = keyframe_indices(len(images), frames)
+    return {
+        'conditions': [
+            LTXVideoCondition(image=image, frame_index=index) for image, index in zip(images, indices)
+        ]
+    }
 
 
 def keyframe_indices(count, frames):
