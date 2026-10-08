@@ -184,7 +184,7 @@ def load_distilled(torch):
         LTXVideoTransformer3DModel,
     )
     from safetensors.torch import load_file
-    from transformers import T5EncoderModel, T5TokenizerFast
+    from transformers import T5EncoderModel, T5Tokenizer
 
     checkpoint = load_file(distilled_checkpoint())
     transformer = LTXVideoTransformer3DModel.from_single_file(checkpoint, torch_dtype=torch.bfloat16)
@@ -195,6 +195,6 @@ def load_distilled(torch):
         scheduler=FlowMatchEulerDiscreteScheduler(),
         vae=vae,
         text_encoder=T5EncoderModel.from_pretrained(MODEL, subfolder='text_encoder', torch_dtype=torch.bfloat16),
-        tokenizer=T5TokenizerFast.from_pretrained(MODEL, subfolder='tokenizer'),
+        tokenizer=T5Tokenizer.from_pretrained(MODEL, subfolder='tokenizer'),  # The slow one needs no protobuf.
         transformer=transformer,
     )
