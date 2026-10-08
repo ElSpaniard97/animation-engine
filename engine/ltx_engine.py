@@ -10,6 +10,13 @@ os.environ.setdefault('HF_HOME', str(ROOT / '.models'))
 os.environ.setdefault('PYTORCH_ENABLE_MPS_FALLBACK', '1')
 
 MODEL = 'Lightricks/LTX-Video'
+# LTX-Video 0.9.8, 2B parameters, distilled to 8 steps without guidance. It animates still images
+# far better than the original 0.9 release and is faster. One ~6 GB file holds the transformer and
+# VAE; the T5 text encoder is shared with the original model, so it isn't downloaded again.
+DISTILLED_FILE = 'ltxv-2b-0.9.8-distilled.safetensors'
+DISTILLED_TIMESTEPS = [1000, 993, 987, 981, 975, 909, 725, 0.03]
+# 'distilled' (default) or 'classic' for the original 0.9 model with quality, guidance and Avoid.
+MODEL_KIND = os.environ.get('ANIMATION_ENGINE_MODEL', 'distilled')
 NEGATIVE_PROMPT = 'blurry, distorted, low quality'
 FPS = 24
 PROMPT_CACHE_SIZE = 16
@@ -50,12 +57,15 @@ class Engine:
         else:
             raise RuntimeError('No supported GPU found. Apple Metal or NVIDIA CUDA is required.')
         self.progress('Loading model weights (first run downloads them)')
-        self.text_to_video = LTXPipeline.from_pretrained(MODEL, torch_dtype=torch.bfloat16)
+        if MODEL_KIND == 'classic':
+            self.text_to_video = LTXPipeline.from_pretrained(MODEL, torch_dtype=torch.bfloat16)
+            # Shares the same modules, so image-to-video costs no extra memory.
+            self.image_to_video = LTXImageToVideoPipeline(**self.text_to_video.components)
+        else:
+            self.text_to_video = self.image_to_video = load_distilled(torch)
         self.progress('Moving model to the GPU')
         self.text_to_video.to(self.device)
         self.text_to_video.vae.enable_tiling()
-        # Shares the same modules, so image-to-video costs no extra memory.
-        self.image_to_video = LTXImageToVideoPipeline(**self.text_to_video.components)
         self.loaded = True
         self.timings['load'] = time.monotonic() - started
 
@@ -78,11 +88,11 @@ class Engine:
             embeddings = self.text_to_video.encode_prompt(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
-                do_classifier_free_guidance=True,
+                do_classifier_free_guidance=MODEL_KIND == 'classic',
                 device=self.torch.device(self.device),
                 max_sequence_length=128,
             )
-        embeddings = tuple(tensor.cpu() for tensor in embeddings)
+        embeddings = tuple(None if tensor is None else tensor.cpu() for tensor in embeddings)
         self.embeddings[key] = embeddings
         if len(self.embeddings) > PROMPT_CACHE_SIZE:
             self.embeddings.popitem(last=False)
@@ -101,28 +111,42 @@ class Engine:
         )
         timings['encode'] = time.monotonic() - started
 
+        total = job['steps'] if MODEL_KIND == 'classic' else len(DISTILLED_TIMESTEPS)
+
         def callback(pipeline, step, timestep, kwargs):
             self.sync()
             if should_cancel():
                 raise Cancelled()
-            self.progress('Generating frames', step + 1, job['steps'])
+            self.progress('Generating frames', step + 1, total)
             return kwargs
 
         device = self.device
         args = dict(
             prompt_embeds=prompt_embeds.to(device),
             prompt_attention_mask=prompt_mask.to(device),
-            negative_prompt_embeds=negative_embeds.to(device),
-            negative_prompt_attention_mask=negative_mask.to(device),
             width=job['width'],
             height=job['height'],
             num_frames=job['frames'],
             frame_rate=FPS,
-            num_inference_steps=job['steps'],
-            guidance_scale=job.get('guidance', 3.0),
             generator=self.torch.Generator(device='cpu').manual_seed(job['seed']),
             callback_on_step_end=callback,
         )
+        if MODEL_KIND == 'classic':
+            args.update(
+                negative_prompt_embeds=negative_embeds.to(device),
+                negative_prompt_attention_mask=negative_mask.to(device),
+                num_inference_steps=job['steps'],
+                guidance_scale=job.get('guidance', 3.0),
+            )
+        else:
+            # The distilled model's own schedule; quality, guidance and Avoid don't apply to it.
+            args.update(
+                timesteps=DISTILLED_TIMESTEPS,
+                guidance_scale=1.0,
+                decode_timestep=0.05,
+                decode_noise_scale=0.025,
+                image_cond_noise_scale=0.0,
+            )
         pipe = self.text_to_video
         if job.get('image_path'):
             pipe = self.image_to_video
@@ -142,3 +166,35 @@ class Engine:
         export_to_video(frames, job['output_path'], fps=FPS)
         timings['export'] = time.monotonic() - started
         return timings
+
+
+def distilled_checkpoint():
+    """Local path of the distilled checkpoint, downloading it into .models on first use."""
+    from huggingface_hub import hf_hub_download
+
+    return hf_hub_download(MODEL, DISTILLED_FILE)
+
+
+def load_distilled(torch):
+    """LTXConditionPipeline for the distilled 0.9.8 model, reusing the original model's text encoder."""
+    from diffusers import (
+        AutoencoderKLLTXVideo,
+        FlowMatchEulerDiscreteScheduler,
+        LTXConditionPipeline,
+        LTXVideoTransformer3DModel,
+    )
+    from safetensors.torch import load_file
+    from transformers import T5EncoderModel, T5TokenizerFast
+
+    checkpoint = load_file(distilled_checkpoint())
+    transformer = LTXVideoTransformer3DModel.from_single_file(checkpoint, torch_dtype=torch.bfloat16)
+    vae = AutoencoderKLLTXVideo.from_single_file(checkpoint, torch_dtype=torch.bfloat16)
+    del checkpoint
+    return LTXConditionPipeline(
+        # Default flow-matching settings, so the distilled timesteps are used exactly as trained.
+        scheduler=FlowMatchEulerDiscreteScheduler(),
+        vae=vae,
+        text_encoder=T5EncoderModel.from_pretrained(MODEL, subfolder='text_encoder', torch_dtype=torch.bfloat16),
+        tokenizer=T5TokenizerFast.from_pretrained(MODEL, subfolder='tokenizer'),
+        transformer=transformer,
+    )

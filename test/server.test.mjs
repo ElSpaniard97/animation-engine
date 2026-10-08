@@ -85,7 +85,12 @@ test('serves the editor and blocks other hosts and paths outside public/', async
 
 test('reports the engine', async () => {
   const res = await call('GET', '/api/engine');
-  assert.deepEqual(res.json, { installed: true, active: null, engine: 'LTX-Video · local GPU' });
+  assert.deepEqual(res.json, {
+    installed: true,
+    active: null,
+    engine: 'LTX-Video · local GPU',
+    model: 'distilled',
+  });
 });
 
 test('only accepts generation requests from the app', async () => {

@@ -8,6 +8,8 @@ export { validate } from './server/validate.mjs';
 
 // 5173 unless another program has it, then the next free port. ANIMATION_ENGINE_PORT pins one.
 const pinned = Number(process.env.ANIMATION_ENGINE_PORT);
+// Which LTX-Video model the worker loads: the fast distilled 0.9.8 one, or 'classic' 0.9.
+const model = process.env.ANIMATION_ENGINE_MODEL === 'classic' ? 'classic' : 'distilled';
 const jobsDir = resolve('.jobs');
 await mkdir(jobsDir, { recursive: true });
 
@@ -15,13 +17,13 @@ const runner = new JobRunner({
   jobsDir,
   python: resolve('.venv/bin/python'),
   script: resolve('engine/worker.py'),
-  env: { HF_HOME: resolve('.models'), PYTORCH_ENABLE_MPS_FALLBACK: '1' },
+  env: { HF_HOME: resolve('.models'), PYTORCH_ENABLE_MPS_FALLBACK: '1', ANIMATION_ENGINE_MODEL: model },
   // The model stays loaded between generations and is unloaded after this long without one.
   idleMs: (Number(process.env.ANIMATION_ENGINE_IDLE_MINUTES) || 10) * 60 * 1000,
 });
 await runner.load();
 const { server, port } = await listenOnFreePort(
-  (port) => createAppServer({ port, publicDir: resolve('public'), runner }),
+  (port) => createAppServer({ port, publicDir: resolve('public'), runner, model }),
   { port: pinned || DEFAULT_PORT, fixed: Boolean(pinned) },
 );
 console.log(`Animation Engine: http://127.0.0.1:${port}`);
