@@ -1,6 +1,6 @@
 import { $ } from './dom.js';
 
-const LENGTHS = { 9: '0.4s', 25: '1s', 49: '2s' };
+const LENGTHS = { 9: '0.4s', 25: '1s', 49: '2s', 121: '5s', 241: '10s' };
 const QUALITIES = { draft: 'draft', high: 'high quality' };
 let editor;
 
