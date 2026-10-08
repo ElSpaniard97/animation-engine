@@ -1,5 +1,6 @@
 const RATIOS = ['9:16', '16:9', '1:1'];
-const FRAME_COUNTS = [9, 25, 49];
+// 24 fps; LTX-Video needs 8n + 1 frames.
+const FRAME_COUNTS = [9, 25, 49, 121, 241];
 const MAX_SEED = 2147483647;
 const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
 

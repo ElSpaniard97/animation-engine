@@ -38,6 +38,12 @@ test('rejects bad prompts, formats, lengths and seeds', () => {
   }
 });
 
+test('accepts clips up to 10 seconds', () => {
+  assert.equal(validate({ ...base, frames: 121 }).frames, 121);
+  assert.equal(validate({ ...base, frames: 241 }).frames, 241);
+  assert.throws(() => validate({ ...base, frames: 240 }));
+});
+
 test('maps quality to steps and keeps the chosen guidance and negative prompt', () => {
   assert.equal(validate({ ...base, quality: 'draft' }).steps, 12);
   assert.equal(validate({ ...base, quality: 'high' }).steps, 32);
