@@ -1,6 +1,7 @@
 import { $ } from './dom.js';
 import { imageToPngDataUrl } from './files.js';
 import { renderGallery } from './gallery.js';
+import { promptTip } from './prompt-tips.js';
 
 const POLL_MS = 1500;
 const MAX_SEED = 2147483647;
@@ -134,12 +135,25 @@ async function cancel() {
   }
 }
 
+function showTip() {
+  const tip = promptTip($('prompt').value, $('aiMode').value);
+  $('promptTip').textContent = tip;
+  $('promptTip').hidden = !tip;
+}
+
 /** Wires the Local AI Generation panel and resumes watching any queue that is already going. */
 export function initAi(editor) {
   $('generate').onclick = () => generate(editor);
   $('cancel').onclick = cancel;
   $('randomSeed').onclick = () => ($('aiSeed').value = Math.floor(Math.random() * (MAX_SEED + 1)));
   $('aiGuidance').oninput = () => ($('aiGuidanceValue').textContent = $('aiGuidance').value);
+  $('prompt').oninput = showTip;
+  $('aiMode').onchange = () => {
+    // Still images barely move at the smallest size, so animating one starts at Medium.
+    if ($('aiMode').value === 'image' && $('aiResolution').value === 'preview')
+      $('aiResolution').value = 'medium';
+    showTip();
+  };
   fetch('/api/engine')
     .then((response) => response.json())
     .then((engine) => {

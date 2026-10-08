@@ -38,6 +38,7 @@ function reuse(job) {
   $('aiSeed').value = job.seed;
   $('aiFrames').value = String(job.frames);
   $('aiMode').value = job.mode;
+  $('prompt').dispatchEvent(new Event('input')); // Refreshes the prompt tip for this mode.
   $('aiQuality').value = job.quality;
   $('aiResolution').value = job.resolution;
   $('aiGuidance').value = job.guidance;

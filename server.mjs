@@ -1,12 +1,13 @@
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createAppServer } from './server/app.mjs';
 import { JobRunner } from './server/jobs.mjs';
+import { DEFAULT_PORT, listenOnFreePort } from './server/listen.mjs';
 
 export { validate } from './server/validate.mjs';
 
-// The Mac app expects 5173; another port lets a second copy run alongside it.
-const PORT = Number(process.env.ANIMATION_ENGINE_PORT) || 5173;
+// 5173 unless another program has it, then the next free port. ANIMATION_ENGINE_PORT pins one.
+const pinned = Number(process.env.ANIMATION_ENGINE_PORT);
 const jobsDir = resolve('.jobs');
 await mkdir(jobsDir, { recursive: true });
 
@@ -19,9 +20,14 @@ const runner = new JobRunner({
   idleMs: (Number(process.env.ANIMATION_ENGINE_IDLE_MINUTES) || 10) * 60 * 1000,
 });
 await runner.load();
-const server = createAppServer({ port: PORT, publicDir: resolve('public'), runner });
-
-server.listen(PORT, '127.0.0.1', () => console.log(`Animation Engine: http://127.0.0.1:${PORT}`));
+const { server, port } = await listenOnFreePort(
+  (port) => createAppServer({ port, publicDir: resolve('public'), runner }),
+  { port: pinned || DEFAULT_PORT, fixed: Boolean(pinned) },
+);
+console.log(`Animation Engine: http://127.0.0.1:${port}`);
+// The desktop app finds a running server through this file, or the message when it started it.
+await writeFile(resolve(jobsDir, 'server.json'), JSON.stringify({ port, pid: process.pid }));
+process.parentPort?.postMessage({ port });
 process.on('SIGINT', () => {
   runner.killAll();
   server.close(() => process.exit());
