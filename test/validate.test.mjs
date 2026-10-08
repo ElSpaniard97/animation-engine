@@ -42,6 +42,9 @@ test('accepts clips up to 10 seconds', () => {
   assert.equal(validate({ ...base, frames: 121 }).frames, 121);
   assert.equal(validate({ ...base, frames: 241 }).frames, 241);
   assert.throws(() => validate({ ...base, frames: 240 }));
+  assert.equal(validate({ ...base, frames: 241, resolution: 'medium' }).frames, 241);
+  assert.equal(validate({ ...base, frames: 121, resolution: 'large' }).frames, 121);
+  assert.throws(() => validate({ ...base, frames: 241, resolution: 'large' }), /up to 5 seconds/);
 });
 
 test('maps quality to steps and keeps the chosen guidance and negative prompt', () => {

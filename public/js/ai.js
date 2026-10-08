@@ -135,6 +135,17 @@ async function cancel() {
   }
 }
 
+// Mirrors MAX_FRAMES in server/validate.mjs: Large clips stop at 5 seconds.
+const MAX_FRAMES = { large: 121 };
+
+/** Disables lengths the chosen resolution can't fit in memory, moving off one if it's selected. */
+function limitLength() {
+  const max = MAX_FRAMES[$('aiResolution').value] ?? Infinity;
+  const options = Array.from($('aiFrames').options);
+  for (const option of options) option.disabled = +option.value > max;
+  if (+$('aiFrames').value > max) $('aiFrames').value = String(max);
+}
+
 function showTip() {
   const tip = promptTip($('prompt').value, $('aiMode').value);
   $('promptTip').textContent = tip;
@@ -148,6 +159,7 @@ export function initAi(editor) {
   $('randomSeed').onclick = () => ($('aiSeed').value = Math.floor(Math.random() * (MAX_SEED + 1)));
   $('aiGuidance').oninput = () => ($('aiGuidanceValue').textContent = $('aiGuidance').value);
   $('prompt').oninput = showTip;
+  $('aiResolution').onchange = limitLength;
   $('aiMode').onchange = () => {
     // Still images barely move at the smallest size, so animating one starts at Medium.
     if ($('aiMode').value === 'image' && $('aiResolution').value === 'preview')

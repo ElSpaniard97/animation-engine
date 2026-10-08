@@ -25,6 +25,10 @@ export const SIZES = {
   },
 };
 
+// Longest clip (frames) per size where one differs from FRAME_COUNTS: 10 seconds at Large needs
+// more memory than a 24 GB Mac has, and 10 seconds at Medium already swaps heavily there.
+export const MAX_FRAMES = { large: 121 };
+
 // Denoising steps per quality preset: fewer is faster, more is sharper and more coherent.
 export const QUALITY_STEPS = { draft: 12, standard: 20, high: 32 };
 export const DEFAULT_GUIDANCE = 3;
@@ -49,6 +53,9 @@ export function validate(data) {
   }
   const resolution = data.resolution ?? 'preview';
   if (!Object.hasOwn(SIZES, resolution)) throw Error('Choose a supported resolution');
+  if (data.frames > (MAX_FRAMES[resolution] ?? Infinity)) {
+    throw Error('Large clips can be up to 5 seconds. Choose Medium or Preview for longer ones.');
+  }
   const quality = data.quality ?? 'standard';
   if (!Object.hasOwn(QUALITY_STEPS, quality)) throw Error('Choose a supported quality');
   const guidance = data.guidance ?? DEFAULT_GUIDANCE;
