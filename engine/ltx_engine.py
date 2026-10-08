@@ -21,8 +21,13 @@ DISTILLED_TIMESTEPS = [1000, 993, 987, 981, 975, 909, 725, 0.03]
 UPSCALER = 'Lightricks/ltxv-spatial-upscaler-0.9.7'
 REFINE_TIMESTEPS = [1000, 909, 725, 421, 0]
 REFINE_STRENGTH = 0.999  # Runs 4 of the 5 refine steps.
-# 'distilled' (default) or 'classic' for the original 0.9 model with quality, guidance and Avoid.
-MODEL_KIND = os.environ.get('ANIMATION_ENGINE_MODEL', 'distilled')
+# 13B with disk offloading by default; 'distilled' keeps the lightweight 2B model available.
+MODEL_KIND = os.environ.get('ANIMATION_ENGINE_MODEL', 'distilled-13b')
+if MODEL_KIND not in ('distilled-13b', 'distilled', 'classic'):
+    raise ValueError('Unknown ANIMATION_ENGINE_MODEL')
+IS_13B = MODEL_KIND == 'distilled-13b'
+if IS_13B:
+    os.environ.setdefault('HF_XET_HIGH_PERFORMANCE', '1')
 NEGATIVE_PROMPT = 'blurry, distorted, low quality'
 FPS = 24
 PROMPT_CACHE_SIZE = 16
@@ -35,10 +40,9 @@ class Cancelled(Exception):
 class Engine:
     """Holds the LTX pipelines on the GPU. `progress(stage, step, total)` reports what it is doing.
 
-    Everything, including the T5 text encoder, lives on the GPU: on an M4 that encodes a prompt in
-    about 2 s instead of about 22 s on the CPU, at the cost of holding about 14 GB while loaded
-    (the app unloads the worker when idle). Prompt embeddings are cached, so re-running a prompt
-    with a new seed skips encoding entirely.
+    The 2B profile keeps its modules on the GPU. The 13B profile uses disk-backed transformer
+    groups and moves T5 onto the GPU only while encoding. Prompt embeddings are cached, so
+    re-running a prompt with a new seed skips encoding entirely.
     """
 
     def __init__(self, progress):
@@ -63,7 +67,7 @@ class Engine:
             self.device = 'cuda'
         else:
             raise RuntimeError('No supported GPU found. Apple Metal or NVIDIA CUDA is required.')
-        self.progress('Loading model weights (first run downloads them)')
+        self.progress('Loading 13B weights and preparing disk offloading' if IS_13B else 'Loading model weights (first run downloads them)')
         if MODEL_KIND == 'classic':
             self.text_to_video = LTXPipeline.from_pretrained(MODEL, torch_dtype=torch.bfloat16)
             # Shares the same modules, so image-to-video costs no extra memory.
@@ -71,7 +75,12 @@ class Engine:
         else:
             self.text_to_video = self.image_to_video = load_distilled(torch)
         self.progress('Moving model to the GPU')
-        self.text_to_video.to(self.device)
+        if IS_13B:
+            # Transformer layers are loaded from disk a group at a time. Keep the shared T5
+            # encoder on CPU between prompt encodes, rather than retaining another ~9 GB on MPS.
+            self.text_to_video.vae.to(self.device)
+        else:
+            self.text_to_video.to(self.device)
         self.text_to_video.vae.enable_tiling()
         self.loaded = True
         self.timings['load'] = time.monotonic() - started
@@ -91,19 +100,31 @@ class Engine:
             self.embeddings.move_to_end(key)
             return self.embeddings[key]
         self.progress('Encoding prompt')
+        if IS_13B:
+            self.text_to_video.text_encoder.to(self.device)
+        try:
+            embeddings = self._encode_prompt(prompt, negative_prompt)
+        finally:
+            if IS_13B:
+                self.text_to_video.text_encoder.to('cpu')
+                self.sync()
+                if self.device == 'mps':
+                    self.torch.mps.empty_cache()
+        embeddings = tuple(None if tensor is None else tensor.cpu() for tensor in embeddings)
+        self.embeddings[key] = embeddings
+        if len(self.embeddings) > PROMPT_CACHE_SIZE:
+            self.embeddings.popitem(last=False)
+        return embeddings
+
+    def _encode_prompt(self, prompt, negative_prompt):
         with self.torch.inference_mode():
-            embeddings = self.text_to_video.encode_prompt(
+            return self.text_to_video.encode_prompt(
                 prompt=prompt,
                 negative_prompt=negative_prompt,
                 do_classifier_free_guidance=MODEL_KIND == 'classic',
                 device=self.torch.device(self.device),
                 max_sequence_length=128,
             )
-        embeddings = tuple(None if tensor is None else tensor.cpu() for tensor in embeddings)
-        self.embeddings[key] = embeddings
-        if len(self.embeddings) > PROMPT_CACHE_SIZE:
-            self.embeddings.popitem(last=False)
-        return embeddings
 
     def generate(self, job, should_cancel=lambda: False):
         """Renders one job to job['output_path']. Raises Cancelled if should_cancel() turns true."""
@@ -199,7 +220,7 @@ class Engine:
 
             self.progress('Loading the detail upscaler (first use downloads it)')
             self.upscaler = LTXLatentUpsamplePipeline.from_pretrained(
-                UPSCALER, vae=pipe.vae, torch_dtype=self.torch.bfloat16
+                ('Lightricks/ltxv-spatial-upscaler-0.9.8' if IS_13B else UPSCALER), vae=pipe.vae, torch_dtype=self.torch.bfloat16
             ).to(self.device)
         self.progress('Upscaling')
         latents = self.upscaler(latents=latents, adain_factor=1.0, output_type='latent').frames
@@ -243,7 +264,7 @@ def distilled_checkpoint():
     """Local path of the distilled checkpoint, downloading it into .models on first use."""
     from huggingface_hub import hf_hub_download
 
-    return hf_hub_download(MODEL, DISTILLED_FILE)
+    return hf_hub_download(MODEL, 'ltxv-13b-0.9.8-distilled.safetensors' if IS_13B else DISTILLED_FILE)
 
 
 def load_distilled(torch):
@@ -258,9 +279,24 @@ def load_distilled(torch):
     from transformers import T5EncoderModel, T5Tokenizer
 
     checkpoint = load_file(distilled_checkpoint())
-    transformer = LTXVideoTransformer3DModel.from_single_file(checkpoint, torch_dtype=torch.bfloat16)
-    vae = AutoencoderKLLTXVideo.from_single_file(checkpoint, torch_dtype=torch.bfloat16)
+    config = {'config': 'Lightricks/LTX-Video-0.9.8-13B-distilled'} if IS_13B else {}
+    transformer = LTXVideoTransformer3DModel.from_single_file(
+        checkpoint, torch_dtype=torch.bfloat16, subfolder='transformer', **config
+    )
+    vae = AutoencoderKLLTXVideo.from_single_file(
+        checkpoint, torch_dtype=torch.bfloat16, subfolder='vae', **config
+    )
     del checkpoint
+    if IS_13B:
+        device = 'mps' if torch.backends.mps.is_available() else 'cuda'
+        # BF16 weights exceed a 24 GB Mac's GPU budget. Disk offloading avoids keeping
+        # the full transformer resident in either CPU or GPU memory during inference.
+        transformer.enable_group_offload(
+            onload_device=torch.device(device),
+            offload_type='block_level', num_blocks_per_group=2, use_stream=False,
+            offload_to_disk_path=str(ROOT / '.models' / 'offload' / 'ltx-13b-bf16'),
+        )
+        gc.collect()
     return LTXConditionPipeline(
         # Default flow-matching settings, so the distilled timesteps are used exactly as trained.
         scheduler=FlowMatchEulerDiscreteScheduler(),

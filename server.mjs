@@ -8,8 +8,9 @@ export { validate } from './server/validate.mjs';
 
 // 5173 unless another program has it, then the next free port. ANIMATION_ENGINE_PORT pins one.
 const pinned = Number(process.env.ANIMATION_ENGINE_PORT);
-// Which LTX-Video model the worker loads: the fast distilled 0.9.8 one, or 'classic' 0.9.
-const model = process.env.ANIMATION_ENGINE_MODEL === 'classic' ? 'classic' : 'distilled';
+// 13B distilled with disk offloading by default; 2B distilled and classic remain available.
+const model = process.env.ANIMATION_ENGINE_MODEL || 'distilled-13b';
+if (!['distilled-13b', 'distilled', 'classic'].includes(model)) throw Error('Unknown ANIMATION_ENGINE_MODEL');
 const jobsDir = resolve('.jobs');
 await mkdir(jobsDir, { recursive: true });
 

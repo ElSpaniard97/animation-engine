@@ -175,11 +175,15 @@ export function initAi(editor) {
   fetch('/api/engine')
     .then((response) => response.json())
     .then((engine) => {
-      if (engine.model === 'distilled') {
+      if (engine.model !== 'classic') {
         // The distilled model runs its own fixed schedule without guidance, so these do nothing.
         $('aiQuality').closest('label').hidden = true;
         document.querySelector('.advanced').hidden = true;
-        status('LTX-Video 0.9.8 distilled · local inference · first run downloads the model.');
+        status(
+          engine.model === 'distilled-13b'
+            ? 'LTX-Video 13B distilled · local GPU with disk offloading · start with a 2-second Medium clip.'
+            : 'LTX-Video 2B distilled · local inference.',
+        );
       } else {
         $('aiResolution').querySelector('[value="detail"]').remove(); // Needs the distilled model.
       }

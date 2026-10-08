@@ -21,6 +21,7 @@ async function exists(path) {
 /** The settings a job was made with, kept so the gallery can show and reuse them. */
 function describe(config) {
   return {
+    model: config.model || 'legacy',
     prompt: config.prompt,
     seed: config.seed,
     frames: config.frames,
@@ -47,6 +48,7 @@ function describe(config) {
 export class JobRunner {
   constructor({ jobsDir, python, script, env = {}, idleMs }) {
     this.jobsDir = jobsDir;
+    this.model = env.ANIMATION_ENGINE_MODEL || 'distilled';
     this.python = python;
     this.worker = new WorkerProcess({ python, script, env, idleMs });
     this.jobs = new Map();
@@ -114,7 +116,7 @@ export class JobRunner {
     const id = randomUUID();
     const dir = resolve(this.jobsDir, id);
     await mkdir(dir);
-    const config = { ...data, output_path: resolve(dir, 'output.mp4') };
+    const config = { ...data, model: this.model, output_path: resolve(dir, 'output.mp4') };
     delete config.image;
     delete config.keyframes;
     if (data.image) {
