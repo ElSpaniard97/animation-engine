@@ -20,14 +20,14 @@ const ACTION_ROUTE = /^\/api\/jobs\/([a-f0-9-]+)\/(cancel|delete)$/;
  * Creates the local studio server. It only answers requests addressed to the loopback app
  * address, and only accepts POSTs that come from the app's own pages.
  */
-export function createAppServer({ port, publicDir, runner }) {
+export function createAppServer({ port, publicDir, runner, model = 'distilled' }) {
   const hosts = [`127.0.0.1:${port}`, `localhost:${port}`];
   const origins = hosts.map((host) => `http://${host}`);
 
   async function handleApi(req, res, url) {
     if (req.method === 'GET' && url.pathname === '/api/engine') {
       const installed = await runner.isInstalled();
-      return sendJson(res, 200, { installed, active: runner.active, engine: 'LTX-Video · local GPU' });
+      return sendJson(res, 200, { installed, active: runner.active, engine: 'LTX-Video · local GPU', model });
     }
     if (req.method === 'POST') {
       if (!origins.includes(req.headers.origin)) {
