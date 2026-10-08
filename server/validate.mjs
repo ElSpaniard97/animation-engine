@@ -26,11 +26,18 @@ export const SIZES = {
     '16:9': { width: 832, height: 480 },
     '1:1': { width: 704, height: 704 },
   },
+  // Generated at half these sizes, upscaled 2x and refined: the sharpest, and the slowest.
+  detail: {
+    '9:16': { width: 512, height: 896 },
+    '16:9': { width: 896, height: 512 },
+    '1:1': { width: 768, height: 768 },
+  },
 };
 
-// Longest clip (frames) per size where one differs from FRAME_COUNTS: 10 seconds at Large needs
-// more memory than a 24 GB Mac has, and 10 seconds at Medium already swaps heavily there.
-export const MAX_FRAMES = { large: 121 };
+// Longest clip (frames) per size where one differs from FRAME_COUNTS: 10 seconds at Large or High
+// detail needs more memory than a 24 GB Mac has, and 10 seconds at Medium already swaps there.
+export const MAX_FRAMES = { large: 121, detail: 121 };
+const SIZE_NAMES = { large: 'Large', detail: 'High detail' };
 
 // Denoising steps per quality preset: fewer is faster, more is sharper and more coherent.
 export const QUALITY_STEPS = { draft: 12, standard: 20, high: 32 };
@@ -69,7 +76,9 @@ export function validate(data) {
   const resolution = data.resolution ?? 'preview';
   if (!Object.hasOwn(SIZES, resolution)) throw Error('Choose a supported resolution');
   if (data.frames > (MAX_FRAMES[resolution] ?? Infinity)) {
-    throw Error('Large clips can be up to 5 seconds. Choose Medium or Preview for longer ones.');
+    throw Error(
+      `${SIZE_NAMES[resolution]} clips can be up to 5 seconds. Choose Medium or Preview for longer ones.`,
+    );
   }
   const quality = data.quality ?? 'standard';
   if (!Object.hasOwn(QUALITY_STEPS, quality)) throw Error('Choose a supported quality');

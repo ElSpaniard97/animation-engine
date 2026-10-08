@@ -45,6 +45,11 @@ test('accepts clips up to 10 seconds', () => {
   assert.equal(validate({ ...base, frames: 241, resolution: 'medium' }).frames, 241);
   assert.equal(validate({ ...base, frames: 121, resolution: 'large' }).frames, 121);
   assert.throws(() => validate({ ...base, frames: 241, resolution: 'large' }), /up to 5 seconds/);
+  assert.throws(() => validate({ ...base, frames: 241, resolution: 'detail' }), /High detail clips/);
+  assert.deepEqual(
+    [validate({ ...base, ratio: '9:16', resolution: 'detail' })].map(({ width, height }) => [width, height]),
+    [[512, 896]],
+  );
 });
 
 test('maps quality to steps and keeps the chosen guidance and negative prompt', () => {

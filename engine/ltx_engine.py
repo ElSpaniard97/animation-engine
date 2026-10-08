@@ -15,6 +15,11 @@ MODEL = 'Lightricks/LTX-Video'
 # VAE; the T5 text encoder is shared with the original model, so it isn't downloaded again.
 DISTILLED_FILE = 'ltxv-2b-0.9.8-distilled.safetensors'
 DISTILLED_TIMESTEPS = [1000, 993, 987, 981, 975, 909, 725, 0.03]
+# High detail: generate at half size, upscale the latents 2x, then refine with these few steps.
+# The upscaler is a ~0.5 GB download on first use.
+UPSCALER = 'Lightricks/ltxv-spatial-upscaler-0.9.7'
+REFINE_TIMESTEPS = [1000, 909, 725, 421, 0]
+REFINE_STRENGTH = 0.999  # Runs 4 of the 5 refine steps.
 # 'distilled' (default) or 'classic' for the original 0.9 model with quality, guidance and Avoid.
 MODEL_KIND = os.environ.get('ANIMATION_ENGINE_MODEL', 'distilled')
 NEGATIVE_PROMPT = 'blurry, distorted, low quality'
@@ -38,6 +43,7 @@ class Engine:
     def __init__(self, progress):
         self.progress = progress
         self.loaded = False
+        self.upscaler = None
         self.embeddings = OrderedDict()
         self.timings = {}
 
@@ -111,21 +117,28 @@ class Engine:
         )
         timings['encode'] = time.monotonic() - started
 
+        detail = job.get('resolution') == 'detail'
+        if detail and MODEL_KIND == 'classic':
+            raise RuntimeError('High detail needs the distilled model')
         total = job['steps'] if MODEL_KIND == 'classic' else len(DISTILLED_TIMESTEPS)
+        if detail:
+            total += len(REFINE_TIMESTEPS) - 1
+        done = [0]  # Steps finished by earlier passes, so progress runs on across both.
 
         def callback(pipeline, step, timestep, kwargs):
             self.sync()
             if should_cancel():
                 raise Cancelled()
-            self.progress('Generating frames', step + 1, total)
+            self.progress('Refining detail' if done[0] else 'Generating frames', done[0] + step + 1, total)
             return kwargs
 
         device = self.device
         args = dict(
             prompt_embeds=prompt_embeds.to(device),
             prompt_attention_mask=prompt_mask.to(device),
-            width=job['width'],
-            height=job['height'],
+            # High detail's first pass runs at half size; the refine pass at full size.
+            width=job['width'] // 2 if detail else job['width'],
+            height=job['height'] // 2 if detail else job['height'],
             num_frames=job['frames'],
             frame_rate=FPS,
             generator=self.torch.Generator(device='cpu').manual_seed(job['seed']),
@@ -154,7 +167,7 @@ class Engine:
             if MODEL_KIND == 'classic':
                 paths = paths[:1]  # The original pipeline takes one starting image.
             # Crop to the target aspect like the editor preview instead of stretching.
-            size = (job['width'], job['height'])
+            size = (args['width'], args['height'])
             images = [ImageOps.fit(Image.open(path).convert('RGB'), size, Image.LANCZOS) for path in paths]
             if len(images) == 1:
                 args['image'] = images[0]
@@ -163,7 +176,10 @@ class Engine:
                 args['frame_index'] = keyframe_indices(len(images), job['frames'])
         started = time.monotonic()
         try:
-            frames = pipe(**args).frames[0]
+            if detail:
+                frames = self.generate_detail(pipe, args, job, done)
+            else:
+                frames = pipe(**args).frames[0]
         finally:
             gc.collect()
             if device == 'mps':
@@ -174,6 +190,30 @@ class Engine:
         export_to_video(frames, job['output_path'], fps=FPS)
         timings['export'] = time.monotonic() - started
         return timings
+
+    def generate_detail(self, pipe, args, job, done):
+        """Two passes: half size, a 2x latent upscale, then a short refine at full size."""
+        from PIL import Image
+
+        latents = pipe(**args, output_type='latent').frames
+        done[0] = len(DISTILLED_TIMESTEPS)
+        if self.upscaler is None:
+            from diffusers import LTXLatentUpsamplePipeline
+
+            self.progress('Loading the detail upscaler (first use downloads it)')
+            self.upscaler = LTXLatentUpsamplePipeline.from_pretrained(
+                UPSCALER, vae=pipe.vae, torch_dtype=self.torch.bfloat16
+            ).to(self.device)
+        self.progress('Upscaling')
+        latents = self.upscaler(latents=latents, adain_factor=1.0, output_type='latent').frames
+        size = (job['width'], job['height'])
+        refine = dict(args, width=size[0], height=size[1], latents=latents)
+        refine.update(timesteps=REFINE_TIMESTEPS, denoise_strength=REFINE_STRENGTH)
+        if 'image' in args:
+            images = args['image'] if isinstance(args['image'], list) else [args['image']]
+            images = [image.resize(size, Image.LANCZOS) for image in images]
+            refine['image'] = images if isinstance(args['image'], list) else images[0]
+        return pipe(**refine).frames[0]
 
 
 def keyframe_indices(count, frames):
