@@ -29,7 +29,7 @@ Node.js 20+:
 npm run dev
 ```
 
-Open http://127.0.0.1:5173. Upload an image to begin. The local checkout includes sample artwork excluded from Git.
+Open http://127.0.0.1:5173. If another program already uses port 5173, the server takes the next free port and prints the address it chose; the desktop app finds it on its own. Upload an image to begin. The local checkout includes sample artwork excluded from Git.
 
 ## Install the local GPU engine
 
@@ -43,9 +43,9 @@ npm run dev
 
 Enter a prompt, choose text-to-video or current-image-to-video, and click Generate on my GPU. The first generation downloads the Lightricks/LTX-Video model into `.models/`; allow roughly 27 GB for the initial model weights and substantial download time. Subsequent generations reuse that cache. Inference is local. The server listens only on loopback, validates request origin, and runs one GPU job at a time. You can keep pressing Generate while a job runs: up to 10 more wait in a queue and run in order, each joining the timeline as it finishes. Cancel generation stops the running job, and Cancel on a queued card in the gallery drops that one. The queue does not survive a restart. Jobs and generated MP4s are saved under `.jobs/`, one folder per job, and Cancel stops the worker. Every generation appears in the Generations gallery under the timeline, including after a restart. A finished generation is added to the timeline as a new shot. From the gallery you can put a clip in the selected shot, add it as another shot, reuse its prompt and settings, or delete it along with its files.
 
-The model stays loaded between generations, so only the first one after starting the app pays the loading cost. Re-running a prompt with a new seed also skips prompt encoding. Quality picks the number of denoising steps (Draft 12, Standard 20, High 32), and generation time grows roughly in step with it. Under Advanced, Prompt strength sets the guidance scale (default 3) and Avoid sets the negative prompt. The dice button picks a random seed, and Reuse in the gallery restores all of these. The model is unloaded after 10 idle minutes to give memory back; set `ANIMATION_ENGINE_IDLE_MINUTES` to change that. `ANIMATION_ENGINE_PORT` runs the server on a port other than 5173. To run a single job outside the app, use `.venv/bin/python engine/generate.py .jobs/<id>/job.json`.
+The model stays loaded between generations, so only the first one after starting the app pays the loading cost. Re-running a prompt with a new seed also skips prompt encoding. Quality picks the number of denoising steps (Draft 12, Standard 20, High 32), and generation time grows roughly in step with it. Under Advanced, Prompt strength sets the guidance scale (default 3) and Avoid sets the negative prompt. The dice button picks a random seed, and Reuse in the gallery restores all of these. The model is unloaded after 10 idle minutes to give memory back; set `ANIMATION_ENGINE_IDLE_MINUTES` to change that. `ANIMATION_ENGINE_PORT` pins the server to one port instead of picking the first free one from 5173. To run a single job outside the app, use `.venv/bin/python engine/generate.py .jobs/<id>/job.json`.
 
-The current checkout already has its isolated Python environment installed. It uses PyTorch's MPS backend on the M4 Mac. The whole model, text encoder included, runs on the GPU while loaded. Resolution picks the generation size: Preview (448×256, 256×448 or 448×448), Medium (640×352, 352×640 or 576×576) or Large (832×480, 480×832 or 704×704); clips are 9, 25, or 49 frames at 24 fps. Larger sizes take longer and need more memory, so start with Preview to find a shot and re-run it with Reuse at a larger size. Generation performance and quality depend on hardware and model; this is an initial application, not feature parity with Runway.
+The current checkout already has its isolated Python environment installed. It uses PyTorch's MPS backend on the M4 Mac. The whole model, text encoder included, runs on the GPU while loaded. Resolution picks the generation size: Preview (448×256, 256×448 or 448×448), Medium (640×352, 352×640 or 576×576) or Large (832×480, 480×832 or 704×704); clips are 9, 25, or 49 frames at 24 fps. Larger sizes take longer and need more memory, so start with Preview to find a shot and re-run it with Reuse at a larger size. Animating your own image starts at Medium, because still images barely move at Preview size. The model follows descriptions of the scene as it plays out ("The knight slowly turns his head to the left") much better than instructions ("Make the knight turn his head"), and the panel shows a tip when a prompt reads like an instruction. Generation performance and quality depend on hardware and model; this is an initial application, not feature parity with Runway.
 
 ## Editor features
 
@@ -75,7 +75,7 @@ The tests need no GPU or Python: `test/fixtures/fake-worker.mjs` speaks the same
 
 Code layout:
 
-- `server.mjs`: starts the local server on 127.0.0.1:5173.
+- `server.mjs`: starts the local server on 127.0.0.1:5173, or the next free port, and records it in `.jobs/server.json`.
 - `server/`: request routing and host/origin checks (`app.mjs`), the one-at-a-time GPU job runner (`jobs.mjs`), request validation (`validate.mjs`), and JSON and byte-range file helpers (`http.mjs`).
 - `engine/ltx_engine.py`: loads LTX-Video and renders a job. `engine/worker.py` keeps it loaded and takes jobs from the server (`server/worker.mjs`), and `engine/generate.py` runs one job from the command line.
 - `public/js/`: the editor. `main.js` holds state and wires the controls, `shots.js` does the timeline math, `renderer.js` draws frames, `project.js` saves and opens projects, `ai.js` runs the generation panel, and `export.js` renders MP4 (with `public/vendor/mp4-muxer`) or records WebM.
