@@ -1,6 +1,7 @@
 import { $ } from './dom.js';
 import { imageToPngDataUrl } from './files.js';
 import { renderGallery } from './gallery.js';
+import { initKeyframes, keyframeImages, showKeyframes } from './keyframes.js';
 import { promptTip } from './prompt-tips.js';
 
 const POLL_MS = 1500;
@@ -104,6 +105,8 @@ async function generate(editor) {
       if (editor.video || !editor.image.naturalWidth)
         throw Error('Upload an image before using image-to-video.');
       payload.image = imageToPngDataUrl(editor.image);
+      const keyframes = keyframeImages();
+      if (keyframes.length) payload.keyframes = keyframes;
     }
     const response = await fetch('/api/generate', {
       method: 'POST',
@@ -164,8 +167,10 @@ export function initAi(editor) {
     // Still images barely move at the smallest size, so animating one starts at Medium.
     if ($('aiMode').value === 'image' && $('aiResolution').value === 'preview')
       $('aiResolution').value = 'medium';
+    showKeyframes($('aiMode').value === 'image');
     showTip();
   };
+  initKeyframes(status);
   fetch('/api/engine')
     .then((response) => response.json())
     .then((engine) => {

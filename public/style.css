@@ -540,3 +540,64 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.keyframes {
+  margin: 4px 0 12px;
+}
+.keyframes-label {
+  display: block;
+  font-size: 13px;
+  color: #b5becb;
+  margin-bottom: 6px;
+}
+.keyframes-label small {
+  color: #929aa7;
+}
+.keyframe-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.keyframe-list {
+  display: contents;
+}
+.keyframe {
+  position: relative;
+  margin: 0;
+  width: 56px;
+  height: 56px;
+}
+.keyframe img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid #343a45;
+}
+.keyframe button {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 13px;
+  line-height: 1;
+}
+.keyframe-add {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border: 1px dashed #505662;
+  border-radius: 6px;
+  color: #efcf9f;
+  cursor: pointer;
+  font-size: 20px;
+}
+.keyframe-add:hover {
+  background: #232630;
+}
+.keyframe-add[hidden] {
+  display: none;
+}

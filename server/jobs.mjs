@@ -26,6 +26,8 @@ function describe(config) {
     frames: config.frames,
     ratio: config.ratio || '16:9',
     mode: config.image_path ? 'image' : 'text',
+    // Images that guided the clip, the starting one included.
+    images: config.image_path ? 1 + (config.keyframe_paths?.length ?? 0) : 0,
     // Jobs from before advanced settings existed used these defaults.
     resolution: config.resolution || 'preview',
     width: config.width,
@@ -114,9 +116,18 @@ export class JobRunner {
     await mkdir(dir);
     const config = { ...data, output_path: resolve(dir, 'output.mp4') };
     delete config.image;
+    delete config.keyframes;
     if (data.image) {
       config.image_path = resolve(dir, 'input.png');
       await writeFile(config.image_path, Buffer.from(data.image.split(',')[1], 'base64'));
+    }
+    if (data.keyframes?.length) {
+      config.keyframe_paths = [];
+      for (const [i, image] of data.keyframes.entries()) {
+        const path = resolve(dir, `keyframe-${i + 1}.png`);
+        await writeFile(path, Buffer.from(image.split(',')[1], 'base64'));
+        config.keyframe_paths.push(path);
+      }
     }
     await writeFile(resolve(dir, 'job.json'), JSON.stringify(config));
 

@@ -3,6 +3,9 @@ const RATIOS = ['9:16', '16:9', '1:1'];
 const FRAME_COUNTS = [9, 25, 49, 121, 241];
 const MAX_SEED = 2147483647;
 const IMAGE_DATA_URL = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
+// Keyframe images spread across one clip: the first starts it, the last ends it. Each needs its own
+// 8-frame step of the clip, so short clips take fewer.
+export const MAX_KEYFRAMES = 4;
 
 // Generation sizes LTX-Video accepts (multiples of 32) for each output format. Larger sizes look
 // sharper but take longer and need more memory: Medium has about twice Preview's pixels, Large
@@ -50,6 +53,18 @@ export function validate(data) {
   }
   if (data.image && !IMAGE_DATA_URL.test(data.image)) {
     throw Error('Image must be PNG, JPG, or WebP');
+  }
+  if (data.keyframes !== undefined) {
+    if (!data.image) throw Error('Keyframes need a starting image');
+    if (!Array.isArray(data.keyframes) || data.keyframes.length > MAX_KEYFRAMES - 1) {
+      throw Error(`Use up to ${MAX_KEYFRAMES} images per clip`);
+    }
+    if (!data.keyframes.every((image) => typeof image === 'string' && IMAGE_DATA_URL.test(image))) {
+      throw Error('Image must be PNG, JPG, or WebP');
+    }
+    if (data.frames < 8 * data.keyframes.length + 1) {
+      throw Error('Choose a longer clip for this many images');
+    }
   }
   const resolution = data.resolution ?? 'preview';
   if (!Object.hasOwn(SIZES, resolution)) throw Error('Choose a supported resolution');
