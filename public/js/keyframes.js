@@ -1,5 +1,6 @@
 // Extra images for image-to-video: the current artwork starts the clip and these follow it, spread
 // evenly to the end, so one clip can move between poses or camera angles.
+import { isMirroredReference } from './quality.js';
 import { $ } from './dom.js';
 import { imageToPngDataUrl } from './files.js';
 
@@ -8,6 +9,43 @@ export const MAX_EXTRA_KEYFRAMES = 3;
 // Larger than the biggest generation size, so nothing is lost, while keeping uploads small.
 const KEYFRAME_SIDE = 896;
 const keyframes = [];
+let referenceImage = () => null;
+let warningVersion = 0;
+function sample(image) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = 48;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(image, 0, 0, 48, 48);
+  return ctx.getImageData(0, 0, 48, 48).data;
+}
+export async function checkReferences() {
+  const version = ++warningVersion;
+  const warning = $('keyframeQuality');
+  const first = referenceImage();
+  if (!first?.naturalWidth || !keyframes.length) {
+    warning.hidden = true;
+    return;
+  }
+  try {
+    const baseline = sample(first);
+    let mirrored = false;
+    for (const source of keyframes) {
+      const image = new Image();
+      await new Promise((resolve, reject) => {
+        image.onload = resolve;
+        image.onerror = reject;
+        image.src = source;
+      });
+      if (isMirroredReference(baseline, sample(image), 48, 48)) mirrored = true;
+    }
+    if (version !== warningVersion) return;
+    warning.hidden = !mirrored;
+    warning.textContent =
+      'A keyframe appears to mirror the whole image, reversing the subject and background. For a head turn, use the same scene with only the pose changed; mirrored scenes can cause morphing or a full-body spin.';
+  } catch {
+    if (version === warningVersion) warning.hidden = true;
+  }
+}
 
 function decode(file) {
   const url = URL.createObjectURL(file);
@@ -42,6 +80,7 @@ function render() {
     }),
   );
   $('addKeyframe').hidden = keyframes.length >= MAX_EXTRA_KEYFRAMES;
+  checkReferences();
 }
 
 /** The extra keyframe images as PNG data URLs, in clip order. */
@@ -53,7 +92,8 @@ export function showKeyframes(visible) {
 }
 
 /** Wires the Add image button; `report` shows a message in the panel. */
-export function initKeyframes(report) {
+export function initKeyframes(report, getReference = () => null) {
+  referenceImage = getReference;
   $('keyframeUpload').onchange = async (e) => {
     const files = Array.from(e.target.files).filter((file) => file.type.startsWith('image/'));
     e.target.value = '';

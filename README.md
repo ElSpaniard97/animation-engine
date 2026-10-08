@@ -54,7 +54,7 @@ The current checkout already has its isolated Python environment installed. It u
 - Image import; six camera movements; embers, snow, rain and mist.
 - Portrait, landscape and square formats for the whole video.
 - Live preview, playback and scrubbing; titles and vignette.
-- MP4 export (H.264 where the browser supports it, otherwise VP9), rendered frame by frame with WebCodecs, so it's exact and usually faster than real time. It's 30 fps, with the music track when there is one. Browsers without WebCodecs fall back to real-time WebM recording.
+- MP4 export (H.264 where the browser supports it, otherwise VP9), rendered frame by frame with WebCodecs, so it's exact and usually faster than real time. It's 24 fps, with the music track when there is one. Browsers without WebCodecs fall back to real-time WebM recording.
 - Download and reopen JSON projects with every shot and the music track.
 - Generated MP4 playback in the editor and direct MP4 download.
 - A gallery of past generations that survives restarts, with use in a shot, add as a shot, reuse settings and delete.
@@ -90,3 +90,11 @@ Local text-to-video inference succeeded on the M4 GPU: the MP4 decoded correctly
 - https://huggingface.co/Lightricks/LTX-Video (model license and weights)
 
 Model weights, private artwork, jobs, and environments are excluded from Git.
+
+## Graphics quality review
+
+The two local knight examples were reviewed at five points through each clip. The low-resolution head-turn example used a horizontally mirrored endpoint image, reversing both the sword hand and the background. This encourages a scene transformation and explains why a simple head turn becomes a spin. The high-detail sword example retains more texture but still changes armor and composition as the action progresses; this remains a model limitation, not a codec problem.
+
+The editor now warns when an extra keyframe is a near-exact horizontal mirror of the starting artwork. Use a consistent background, sword hand, armor and camera, with only the intended pose changed. Reusing an image-generation job at Preview starts at Medium instead.
+
+Output is 1080×1920 portrait, 1920×1080 landscape, or 1440×1440 square, at 24 fps. The source/output size notice makes enlargement explicit: a 256×448 clip does not gain true detail by exporting at 1080p. MP4 exports use a resolution-scaled bitrate (about 20 Mbps at 1080p). New AI clips use quality 9 instead of the library default 5 when encoding MP4. Existing compressed clips are preserved and do not gain missing texture retroactively.

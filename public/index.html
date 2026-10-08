@@ -60,6 +60,7 @@
               moves through each pose or angle.</small
             >
           </div>
+          <small id="keyframeQuality" class="note" role="status" hidden></small>
           <div class="pair">
             <label
               >Clip length<select id="aiFrames">
@@ -82,7 +83,7 @@
               <option value="preview" selected>Preview · fastest</option>
               <option value="medium">Medium · slower</option>
               <option value="large">Large · slowest</option>
-              <option value="detail">High detail · sharpest, up to 5 s</option>
+              <option value="detail">High detail · refined 2×, up to 5 s</option>
             </select></label
           ><label
             >Seed
@@ -202,6 +203,7 @@ blurry, distorted, low quality</textarea>
           <span class="pill" id="resolution">720 × 1280</span>
         </div>
         <div class="viewer"><canvas id="canvas" aria-label="Animated artwork preview"></canvas></div>
+        <p id="sourceQuality" class="note" role="status"></p>
         <div class="transport">
           <button id="play" aria-label="Play animation">▶</button><span id="time">0:00</span
           ><input id="scrub" aria-label="Animation position" type="range" min="0" max="1000" value="0" /><span

@@ -1,3 +1,4 @@
+import { sourceQuality } from './quality.js';
 import { initAi } from './ai.js';
 import { loadMusic, syncMusic } from './audio.js';
 import { $ } from './dom.js';
@@ -195,6 +196,12 @@ function draw() {
   $('scrub').value = (editor.t / total) * 1000;
   $('time').textContent = formatTime(editor.t);
   const shot = editor.shots[frame.index];
+  $('sourceQuality').textContent = sourceQuality(
+    shot.kind === 'video' ? shot.media.videoWidth : shot.media.naturalWidth,
+    shot.kind === 'video' ? shot.media.videoHeight : shot.media.naturalHeight,
+    canvas.width,
+    canvas.height,
+  );
   document.querySelectorAll('.clip-progress').forEach((bar, i) => {
     bar.style.width = i === frame.index ? (frame.local / +shot.settings.duration) * 100 + '%' : '0';
   });
