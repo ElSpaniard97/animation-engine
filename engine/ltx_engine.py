@@ -150,9 +150,17 @@ class Engine:
         pipe = self.text_to_video
         if job.get('image_path'):
             pipe = self.image_to_video
+            paths = [job['image_path'], *job.get('keyframe_paths', [])]
+            if MODEL_KIND == 'classic':
+                paths = paths[:1]  # The original pipeline takes one starting image.
             # Crop to the target aspect like the editor preview instead of stretching.
-            image = Image.open(job['image_path']).convert('RGB')
-            args['image'] = ImageOps.fit(image, (job['width'], job['height']), Image.LANCZOS)
+            size = (job['width'], job['height'])
+            images = [ImageOps.fit(Image.open(path).convert('RGB'), size, Image.LANCZOS) for path in paths]
+            if len(images) == 1:
+                args['image'] = images[0]
+            else:
+                args['image'] = images
+                args['frame_index'] = keyframe_indices(len(images), job['frames'])
         started = time.monotonic()
         try:
             frames = pipe(**args).frames[0]
@@ -166,6 +174,13 @@ class Engine:
         export_to_video(frames, job['output_path'], fps=FPS)
         timings['export'] = time.monotonic() - started
         return timings
+
+
+def keyframe_indices(count, frames):
+    """Frames where `count` keyframe images go: the first at the start, the last at the end, the
+    rest evenly between, each on an 8-frame boundary (one latent frame) as LTX-Video needs."""
+    steps = (frames - 1) // 8
+    return [round(i * steps / (count - 1)) * 8 for i in range(count)]
 
 
 def distilled_checkpoint():

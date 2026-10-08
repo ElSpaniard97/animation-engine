@@ -47,6 +47,19 @@
               <option value="image">Current image to video</option>
             </select></label
           >
+          <div id="keyframes" class="keyframes" hidden>
+            <span class="keyframes-label">More images <small>(optional)</small></span>
+            <div class="keyframe-row">
+              <div id="keyframeList" class="keyframe-list"></div>
+              <label id="addKeyframe" class="keyframe-add" title="Add images the clip moves toward"
+                >＋<input id="keyframeUpload" type="file" accept="image/*" multiple hidden
+              /></label>
+            </div>
+            <small class="note"
+              >Your artwork starts the clip. Up to 3 more images are spread evenly to the end, so the clip
+              moves through each pose or angle.</small
+            >
+          </div>
           <div class="pair">
             <label
               >Clip length<select id="aiFrames">

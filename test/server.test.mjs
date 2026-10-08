@@ -135,6 +135,23 @@ test('saves an uploaded image next to the job', async () => {
   assert.equal((await readFile(config.image_path)).toString(), 'fake png');
 });
 
+test('saves keyframe images in clip order and counts them for the gallery', async () => {
+  const png = (text) => 'data:image/png;base64,' + Buffer.from(text).toString('base64');
+  const body = job('A knight turns', {
+    frames: 49,
+    image: png('start'),
+    keyframes: [png('middle'), png('end')],
+  });
+  const start = await call('POST', '/api/generate', { headers: fromApp(), body });
+  assert.equal(start.json.images, 3);
+  await waitFor(start.json.id, 'complete');
+  const { readFile } = await import('node:fs/promises');
+  const config = JSON.parse(await readFile(join(jobsDir, start.json.id, 'job.json'), 'utf8'));
+  assert.equal(config.keyframes, undefined);
+  const saved = await Promise.all(config.keyframe_paths.map((path) => readFile(path, 'utf8')));
+  assert.deepEqual(saved, ['middle', 'end']);
+});
+
 test('reports worker failures and recovers from a crashed worker', async () => {
   const crash = await call('POST', '/api/generate', { headers: fromApp(), body: job('crash') });
   const crashed = await waitFor(crash.json.id);

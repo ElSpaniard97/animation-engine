@@ -1,7 +1,8 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 
-export const MAX_BODY_BYTES = 15 * 1024 * 1024;
+// Room for a generation request carrying several keyframe images.
+export const MAX_BODY_BYTES = 40 * 1024 * 1024;
 
 export function sendJson(res, status, data) {
   res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -13,7 +14,7 @@ export async function readJsonBody(req, limit = MAX_BODY_BYTES) {
   let size = 0;
   for await (const chunk of req) {
     size += chunk.length;
-    if (size > limit) throw Error('Upload must be smaller than 15 MB');
+    if (size > limit) throw Error(`Upload must be smaller than ${limit / 1024 / 1024} MB`);
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString());

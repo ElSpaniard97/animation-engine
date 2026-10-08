@@ -97,3 +97,15 @@ test('accepts PNG, JPEG and WebP images only', () => {
   assert.throws(() => validate({ ...base, image: 'data:image/gif;base64,AAAA' }), /PNG, JPG, or WebP/);
   assert.throws(() => validate({ ...base, image: 'data:image/png;base64,<script>' }));
 });
+
+test('accepts up to 3 keyframes after the starting image when the clip is long enough', () => {
+  const image = 'data:image/png;base64,AAAA';
+  assert.equal(validate({ ...base, image, keyframes: [image, image, image] }).keyframes.length, 3);
+  assert.throws(() => validate({ ...base, keyframes: [image] }), /starting image/);
+  assert.throws(() => validate({ ...base, image, keyframes: [image, image, image, image] }), /up to 4/);
+  assert.throws(() => validate({ ...base, image, keyframes: ['data:image/gif;base64,AAAA'] }), /PNG/);
+  assert.throws(() => validate({ ...base, image, keyframes: 'nope' }), /up to 4/);
+  // 9 frames (0.4 s) holds two images, one per 8-frame step.
+  assert.ok(validate({ ...base, frames: 9, image, keyframes: [image] }));
+  assert.throws(() => validate({ ...base, frames: 9, image, keyframes: [image, image] }), /longer clip/);
+});

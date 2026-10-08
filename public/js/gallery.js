@@ -14,7 +14,7 @@ function describe(job) {
   const size = job.width ? `${job.width}×${job.height}` : job.ratio;
   const parts = [`Seed ${job.seed}`, LENGTHS[job.frames] || `${job.frames} frames`, size];
   if (QUALITIES[job.quality]) parts.push(QUALITIES[job.quality]);
-  if (job.mode === 'image') parts.push('from image');
+  if (job.mode === 'image') parts.push(job.images > 1 ? `from ${job.images} images` : 'from image');
   return parts.join(' · ');
 }
 

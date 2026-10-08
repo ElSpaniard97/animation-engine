@@ -18,7 +18,7 @@ export function blobToDataUrl(blob) {
 
 /**
  * Re-encodes an image as a PNG no larger than `maxSide` on its long edge, so any format the
- * browser can show (GIF, HEIC, large photos) passes the server's PNG/JPEG/WebP and 15 MB limits.
+ * browser can show (GIF, HEIC, large photos) passes the server's PNG/JPEG/WebP and upload size limits.
  */
 export function imageToPngDataUrl(image, maxSide = 1024) {
   const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
