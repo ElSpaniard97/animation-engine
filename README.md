@@ -101,7 +101,7 @@ Output is 1080×1920 portrait, 1920×1080 landscape, or 1440×1440 square, at 24
 
 ## Local 13B upgrade
 
-The app now defaults to `ANIMATION_ENGINE_MODEL=distilled-13b`: the official LTX-Video 0.9.8 13B distilled BF16 checkpoint. The 28.6 GB checkpoint is downloaded into `.models` on first use. On a 24 GB Mac the transformer is offloaded to disk in groups of two blocks; inference still runs on Metal. Budget about 60 GB of additional disk space for the checkpoint and offloaded weights. The text encoder moves onto the GPU only while encoding a new prompt. This trades substantial disk I/O and startup time for a smaller GPU working set. No memory safety limits are disabled.
+The app now defaults to `ANIMATION_ENGINE_MODEL=distilled-13b`: the official LTX-Video 0.9.8 13B distilled BF16 checkpoint. The 28.6 GB checkpoint is downloaded into `.models` on first use using resumable HTTP transfers. On a 24 GB Mac the transformer is offloaded to disk in groups of two blocks; inference still runs on Metal. Budget about 60 GB of additional disk space for the checkpoint and offloaded weights. The text encoder moves onto the GPU only while encoding a new prompt. This trades substantial disk I/O and startup time for a smaller GPU working set. No memory safety limits are disabled.
 
 Start with a 2-second Medium image-to-video clip. Larger and longer clips can still consume significant memory; 13B does not guarantee character consistency. Existing gallery clips remain available and new jobs record their model, so comparisons are explicit.
 

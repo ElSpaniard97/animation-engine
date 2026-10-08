@@ -27,7 +27,9 @@ if MODEL_KIND not in ('distilled-13b', 'distilled', 'classic'):
     raise ValueError('Unknown ANIMATION_ENGINE_MODEL')
 IS_13B = MODEL_KIND == 'distilled-13b'
 if IS_13B:
-    os.environ.setdefault('HF_XET_HIGH_PERFORMANCE', '1')
+    # HTTP downloads resume the partial checkpoint after interruption.
+    os.environ.setdefault('HF_HUB_DISABLE_XET', '1')
+    os.environ.setdefault('HF_HUB_DOWNLOAD_TIMEOUT', '120')
 NEGATIVE_PROMPT = 'blurry, distorted, low quality'
 FPS = 24
 PROMPT_CACHE_SIZE = 16
