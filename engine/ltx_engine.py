@@ -184,7 +184,7 @@ class Engine:
         timings['generate'] = time.monotonic() - started
         started = time.monotonic()
         self.progress('Encoding MP4')
-        export_to_video(frames, job['output_path'], fps=FPS)
+        export_to_video(frames, job['output_path'], fps=FPS, quality=9)
         timings['export'] = time.monotonic() - started
         return timings
 

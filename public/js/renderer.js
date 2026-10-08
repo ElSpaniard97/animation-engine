@@ -1,7 +1,7 @@
 // Draws one frame of a shot. Pure apart from the canvas context it is given, so preview, export
 // and future off-screen rendering all produce the same pixels for the same time and settings.
 
-export const OUTPUT_SIZES = { '9:16': [720, 1280], '16:9': [1280, 720], '1:1': [960, 960] };
+export { OUTPUT_SIZES } from './quality.js';
 
 /** Zoom and offset of the artwork for a camera move at progress `p` (0–1) through the shot. */
 export function cameraTransform(motion, strength, p, width, height) {
@@ -36,6 +36,8 @@ function drawMedia(ctx, media, mediaWidth, mediaHeight, settings, p) {
   const { width: w, height: h } = ctx.canvas;
   const { zoom, x, y } = cameraTransform(settings.motion, settings.strength / 100, p, w, h);
   // Cover the frame, then apply the camera move.
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   const scale = Math.max(w / mediaWidth, h / mediaHeight) * zoom;
   ctx.drawImage(
     media,

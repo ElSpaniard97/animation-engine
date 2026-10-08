@@ -41,6 +41,7 @@ function reuse(job) {
   $('prompt').dispatchEvent(new Event('input')); // Refreshes the prompt tip for this mode.
   $('aiQuality').value = job.quality;
   $('aiResolution').value = job.resolution;
+  if (job.mode === 'image' && job.resolution === 'preview') $('aiResolution').value = 'medium';
   $('aiResolution').dispatchEvent(new Event('change'));
   $('aiGuidance').value = job.guidance;
   $('aiGuidance').dispatchEvent(new Event('input'));

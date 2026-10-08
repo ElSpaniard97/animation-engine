@@ -1,7 +1,7 @@
 import { $ } from './dom.js';
 import { imageToPngDataUrl } from './files.js';
 import { renderGallery } from './gallery.js';
-import { initKeyframes, keyframeImages, showKeyframes } from './keyframes.js';
+import { checkReferences, initKeyframes, keyframeImages, showKeyframes } from './keyframes.js';
 import { promptTip } from './prompt-tips.js';
 
 const POLL_MS = 1500;
@@ -107,6 +107,7 @@ async function generate(editor) {
       payload.image = imageToPngDataUrl(editor.image);
       const keyframes = keyframeImages();
       if (keyframes.length) payload.keyframes = keyframes;
+      await checkReferences();
     }
     const response = await fetch('/api/generate', {
       method: 'POST',
@@ -170,7 +171,7 @@ export function initAi(editor) {
     showKeyframes($('aiMode').value === 'image');
     showTip();
   };
-  initKeyframes(status);
+  initKeyframes(status, () => editor.image);
   fetch('/api/engine')
     .then((response) => response.json())
     .then((engine) => {

@@ -2,8 +2,7 @@ import { $ } from './dom.js';
 import { encodeMusic, findAudioCodec, muxerAudioConfig } from './audio.js';
 import { download } from './files.js';
 
-const FPS = 30;
-const BITRATE = 8_000_000;
+import { EXPORT_FPS as FPS, exportBitrate } from './quality.js';
 const KEYFRAME_EVERY = FPS * 2;
 const WEBM_TYPES = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
 // H.264 plays everywhere (QuickTime, Photos, phones); VP9-in-MP4 is the fallback for browsers
@@ -31,7 +30,7 @@ export async function findMp4Codec(width, height) {
         codec: option.codec,
         width,
         height,
-        bitrate: BITRATE,
+        bitrate: exportBitrate(width, height),
         framerate: FPS,
       });
       if (supported) return option;
@@ -73,7 +72,13 @@ async function exportMp4(editor, codec) {
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
     error: (error) => (failure = error),
   });
-  encoder.configure({ codec: codec.codec, width, height, bitrate: BITRATE, framerate: FPS });
+  encoder.configure({
+    codec: codec.codec,
+    width,
+    height,
+    bitrate: exportBitrate(width, height),
+    framerate: FPS,
+  });
 
   for (let i = 0; i < frameCount; i++) {
     if (failure) throw failure;
@@ -106,7 +111,10 @@ function recordWebm(editor, mime) {
   return new Promise((resolve, reject) => {
     const stream = editor.canvas.captureStream(FPS);
     const chunks = [];
-    const recording = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 6000000 });
+    const recording = new MediaRecorder(stream, {
+      mimeType: mime,
+      videoBitsPerSecond: exportBitrate(editor.canvas.width, editor.canvas.height),
+    });
     const stopTracks = () => stream.getTracks().forEach((track) => track.stop());
     editor.recording = recording;
     recording.ondataavailable = (e) => {
