@@ -138,8 +138,8 @@ async function cancel() {
   }
 }
 
-// Mirrors MAX_FRAMES in server/validate.mjs: Large clips stop at 5 seconds.
-const MAX_FRAMES = { large: 121 };
+// Mirrors MAX_FRAMES in server/validate.mjs: Large and High detail clips stop at 5 seconds.
+const MAX_FRAMES = { large: 121, detail: 121 };
 
 /** Disables lengths the chosen resolution can't fit in memory, moving off one if it's selected. */
 function limitLength() {
@@ -179,6 +179,8 @@ export function initAi(editor) {
         $('aiQuality').closest('label').hidden = true;
         document.querySelector('.advanced').hidden = true;
         status('LTX-Video 0.9.8 distilled · local inference · first run downloads the model.');
+      } else {
+        $('aiResolution').querySelector('[value="detail"]').remove(); // Needs the distilled model.
       }
       if (!engine.installed) status('Local runtime needs installation. See README.');
       watch(editor);
