@@ -32,7 +32,11 @@ test('restores saved jobs and marks interrupted ones', async () => {
     await makeJob(dir, ID(6), { status: done });
     await makeJob(dir, ID(9), { status: { ...done, status: 'queued', stage: 'Waiting for the GPU' } });
     const advanced = { quality: 'high', guidance: 6.5, negative_prompt: 'text' };
-    await makeJob(dir, ID(8), { status: done, video: true, settings: advanced });
+    await makeJob(dir, ID(8), {
+      status: done,
+      video: true,
+      settings: { ...advanced, model: 'distilled-13b' },
+    });
     await mkdir(join(dir, 'not-a-job'));
     await mkdir(join(dir, ID(7)));
 
@@ -60,6 +64,8 @@ test('restores saved jobs and marks interrupted ones', async () => {
     assert.deepEqual({ quality, guidance, negative_prompt }, advanced);
     assert.equal(byId[ID(1)].quality, 'standard', 'older jobs report the settings they ran with');
     assert.equal(byId[ID(1)].guidance, 3);
+    assert.equal(byId[ID(1)].model, 'legacy', 'missing model metadata is not guessed');
+    assert.equal(byId[ID(8)].model, 'distilled-13b', 'model identity survives a restart');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
