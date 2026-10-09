@@ -2,6 +2,8 @@
 
 Independent local AI video and artwork animation workspace. No Runway connection, cloud generation API, or account required.
 
+Cloud rendering and GPU rental integration are paused. Generation runs on the local GPU; no cloud setup is required.
+
 ## Launch the Mac application
 
 The installed local application is `mac-build/Animation Engine-darwin-arm64/Animation Engine.app`. Double-click it in Finder. It opens its own desktop window and starts the local server when needed. You can drag the app into the Dock for convenient access.
