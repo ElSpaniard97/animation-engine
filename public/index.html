@@ -114,6 +114,10 @@ blurry, distorted, low quality</textarea>
           <p id="aiStatus" role="status" class="note">
             LTX-Video · local inference · first run downloads model weights.
           </p>
+          <div id="generationProgress" hidden>
+            <progress id="generationBar" max="100" aria-label="Generation progress"></progress>
+            <p id="generationDetail" class="note"></p>
+          </div>
           <a id="aiDownload" class="button" hidden download="generated-shot.mp4">Download generated MP4</a>
         </div>
         <div class="section">

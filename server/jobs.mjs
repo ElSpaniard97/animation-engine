@@ -82,6 +82,10 @@ export class JobRunner {
           step: null,
           total: null,
           createdAt: saved.createdAt || (await stat(dir)).mtime.toISOString(),
+          startedAt: saved.startedAt,
+          finishedAt: saved.finishedAt,
+          lastProgressAt: saved.lastProgressAt,
+          timings: saved.timings,
           ...describe(config),
         };
         // Jobs from before status files existed count as complete if they left a video.
@@ -154,6 +158,7 @@ export class JobRunner {
     if (this.active || !this.queue.length) return;
     const { job, config } = this.queue.shift();
     this.active = job.id;
+    job.startedAt = new Date().toISOString();
     job.status = 'running';
     job.stage = 'Starting local GPU';
     this.#save(job);
@@ -165,12 +170,12 @@ export class JobRunner {
 
   /** Records the job's status. Writes for a job happen in order, so the newest status wins. */
   #save(job) {
-    const { status, stage, createdAt } = job;
+    const { status, stage, createdAt, startedAt, finishedAt, lastProgressAt, timings } = job;
     const previous = this.saves.get(job.id) || Promise.resolve();
     const write = previous.then(() =>
       writeFile(
         resolve(this.jobsDir, job.id, STATUS_FILE),
-        JSON.stringify({ status, stage, createdAt }),
+        JSON.stringify({ status, stage, createdAt, startedAt, finishedAt, lastProgressAt, timings }),
       ).catch(
         () => {}, // The job folder was deleted; nothing to record.
       ),
@@ -188,6 +193,8 @@ export class JobRunner {
       job.stage = progress.stage;
       job.step = progress.step;
       job.total = progress.total;
+      job.lastProgressAt = new Date().toISOString();
+      this.#save(job);
     });
     if (outcome.timings) job.timings = outcome.timings;
     if (job.status === 'cancelled') return;
@@ -199,6 +206,7 @@ export class JobRunner {
       job.status = outcome.result === 'cancelled' ? 'cancelled' : 'failed';
       job.stage = outcome.result === 'complete' ? 'Worker produced no video' : outcome.stage;
     }
+    job.finishedAt = new Date().toISOString();
     job.step = null;
     job.total = null;
     await this.#save(job);
@@ -230,6 +238,7 @@ export class JobRunner {
     if (job.status !== 'running' && job.status !== 'queued') return;
     if (job.status === 'running') this.worker.cancel(job.id);
     else this.queue = this.queue.filter((entry) => entry.job !== job);
+    job.finishedAt = new Date().toISOString();
     job.status = 'cancelled';
     job.stage = 'Cancelled';
     this.#save(job);

@@ -26,28 +26,27 @@ print(json.dumps(distilled_checkpoint()))
   assert.deepEqual(run(script, 'distilled'), ['Lightricks/LTX-Video', 'ltxv-2b-0.9.8-distilled.safetensors']);
 });
 
-test('13B releases the text encoder after encoding, on failure, and skips cached prompts', () => {
+test('13B caches prompts and synchronizes after encoding failures without moving the full encoder', () => {
   const script = `
 import sys, types, json
 sys.path.insert(0, 'engine')
 from ltx_engine import Engine
-moves=[]
+calls=[]; syncs=[]
 engine=Engine(lambda *args: None)
 engine.device='cuda'
-engine.torch=types.SimpleNamespace(cuda=types.SimpleNamespace(synchronize=lambda:None))
-engine.text_to_video=types.SimpleNamespace(text_encoder=types.SimpleNamespace(to=moves.append))
-engine._encode_prompt=lambda *args: (None,None,None,None)
-engine.encode('same prompt','')
-engine.encode('same prompt','')
-first=list(moves)
-def fail(*args): raise RuntimeError('test failure')
-engine._encode_prompt=fail
-try: engine.encode('different prompt','')
+engine.torch=types.SimpleNamespace(cuda=types.SimpleNamespace(synchronize=lambda:syncs.append(True)))
+def whole_model_move(*args): raise AssertionError('The offloaded encoder must not be moved as a whole')
+engine.text_to_video=types.SimpleNamespace(text_encoder=types.SimpleNamespace(to=whole_model_move))
+def encode(prompt,negative):
+    calls.append(prompt)
+    if prompt=='failure': raise RuntimeError('test failure')
+    return (None,None,None,None)
+engine._encode_prompt=encode
+engine.encode('same','')
+engine.encode('same','')
+try: engine.encode('failure','')
 except RuntimeError: pass
-print(json.dumps([first,moves]))
+print(json.dumps([calls,len(syncs)]))
 `;
-  assert.deepEqual(run(script, 'distilled-13b'), [
-    ['cuda', 'cpu'],
-    ['cuda', 'cpu', 'cuda', 'cpu'],
-  ]);
+  assert.deepEqual(run(script, 'distilled-13b'), [['same', 'failure'], 2]);
 });

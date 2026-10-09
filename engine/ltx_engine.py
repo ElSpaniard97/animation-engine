@@ -43,7 +43,7 @@ class Engine:
     """Holds the LTX pipelines on the GPU. `progress(stage, step, total)` reports what it is doing.
 
     The 2B profile keeps its modules on the GPU. The 13B profile uses disk-backed transformer
-    groups and moves T5 onto the GPU only while encoding. Prompt embeddings are cached, so
+    groups for both the transformer and T5 encoder. Prompt embeddings are cached, so
     re-running a prompt with a new seed skips encoding entirely.
     """
 
@@ -78,8 +78,7 @@ class Engine:
             self.text_to_video = self.image_to_video = load_distilled(torch)
         self.progress('Moving model to the GPU')
         if IS_13B:
-            # Transformer layers are loaded from disk a group at a time. Keep the shared T5
-            # encoder on CPU between prompt encodes, rather than retaining another ~9 GB on MPS.
+            # Transformer and T5 layers are streamed from disk. Only the VAE stays resident.
             self.text_to_video.vae.to(self.device)
         else:
             self.text_to_video.to(self.device)
@@ -102,13 +101,10 @@ class Engine:
             self.embeddings.move_to_end(key)
             return self.embeddings[key]
         self.progress('Encoding prompt')
-        if IS_13B:
-            self.text_to_video.text_encoder.to(self.device)
         try:
             embeddings = self._encode_prompt(prompt, negative_prompt)
         finally:
             if IS_13B:
-                self.text_to_video.text_encoder.to('cpu')
                 self.sync()
                 if self.device == 'mps':
                     self.torch.mps.empty_cache()
@@ -280,6 +276,10 @@ def load_distilled(torch):
     from safetensors.torch import load_file
     from transformers import T5EncoderModel, T5Tokenizer
 
+    if IS_13B:
+        from disk_offload import enable_compact_disk_placeholders
+
+        enable_compact_disk_placeholders()
     checkpoint = load_file(distilled_checkpoint())
     config = {'config': 'Lightricks/LTX-Video-0.9.8-13B-distilled'} if IS_13B else {}
     transformer = LTXVideoTransformer3DModel.from_single_file(
@@ -299,11 +299,23 @@ def load_distilled(torch):
             offload_to_disk_path=str(ROOT / '.models' / 'offload' / 'ltx-13b-bf16'),
         )
         gc.collect()
+    text_encoder = T5EncoderModel.from_pretrained(MODEL, subfolder='text_encoder', torch_dtype=torch.bfloat16)
+    if IS_13B:
+        from diffusers.hooks import apply_group_offloading
+
+        # T5 alone takes roughly 10 GB. Stream its encoder blocks too; keeping it on the
+        # GPU beside the VAE caused heavy memory pressure on the 24 GB Mac.
+        apply_group_offloading(
+            text_encoder.encoder, onload_device=torch.device(device),
+            offload_type='block_level', num_blocks_per_group=1, use_stream=False,
+            offload_to_disk_path=str(ROOT / '.models' / 'offload' / 'ltx-13b-t5-encoder-blocks'),
+        )
+        gc.collect()
     return LTXConditionPipeline(
         # Default flow-matching settings, so the distilled timesteps are used exactly as trained.
         scheduler=FlowMatchEulerDiscreteScheduler(),
         vae=vae,
-        text_encoder=T5EncoderModel.from_pretrained(MODEL, subfolder='text_encoder', torch_dtype=torch.bfloat16),
+        text_encoder=text_encoder,
         tokenizer=T5Tokenizer.from_pretrained(MODEL, subfolder='tokenizer'),  # The slow one needs no protobuf.
         transformer=transformer,
     )

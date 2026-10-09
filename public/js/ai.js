@@ -1,3 +1,4 @@
+import { generationProgress } from './generation-progress.js';
 import { $ } from './dom.js';
 import { imageToPngDataUrl } from './files.js';
 import { renderGallery } from './gallery.js';
@@ -38,6 +39,15 @@ function showQueue(jobs) {
   runningId = running?.id ?? null;
   $('cancel').hidden = !running;
   $('generate').textContent = running || waiting ? 'Add to queue' : 'Generate on my GPU';
+  const job = running || jobs.find((job) => job.status === 'queued') || jobs[0];
+  $('generationProgress').hidden = !job;
+  if (job) {
+    const progress = generationProgress(job);
+    const bar = $('generationBar');
+    if (progress.value === null) bar.removeAttribute('value');
+    else bar.value = progress.value;
+    $('generationDetail').textContent = progress.text;
+  }
   if (!running && !waiting) return;
   const parts = [];
   if (running) parts.push(running.stage + (running.total ? ` · ${running.step}/${running.total}` : ''));
@@ -80,6 +90,8 @@ async function watch(editor) {
       checkNow = () => {};
     }
   } catch (error) {
+    $('generationBar').removeAttribute('value');
+    $('generationDetail').textContent = 'Connection lost — progress cannot be confirmed.';
     status('Status unavailable: ' + error.message + '. Reload to check your generations.');
   } finally {
     watching = false;
