@@ -601,3 +601,9 @@ textarea {
 .keyframe-add[hidden] {
   display: none;
 }
+
+#generationBar {
+  width: 100%;
+  height: 12px;
+  accent-color: #bb8fff;
+}
